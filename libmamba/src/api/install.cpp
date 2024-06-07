@@ -29,6 +29,7 @@
 #include "mamba/download/downloader.hpp"
 #include "mamba/fs/filesystem.hpp"
 #include "mamba/solver/libsolv/solver.hpp"
+#include "mamba/solver/resolvo/solver.hpp"
 #include "mamba/util/path_manip.hpp"
 #include "mamba/util/string.hpp"
 
@@ -512,177 +513,167 @@ namespace mamba
             bool create_env,
             bool remove_prefix_on_failure,
             bool is_retry
-        )
-        {
+        ) {
             assert(&config.context() == &ctx);
 
-            auto& no_pin = config.at("no_pin").value<bool>();
-            auto& no_py_pin = config.at("no_py_pin").value<bool>();
-            auto& freeze_installed = config.at("freeze_installed").value<bool>();
-            auto& retry_clean_cache = config.at("retry_clean_cache").value<bool>();
+            auto &no_pin = config.at("no_pin").value<bool>();
+            auto &no_py_pin = config.at("no_py_pin").value<bool>();
+            auto &freeze_installed = config.at("freeze_installed").value<bool>();
+            auto &retry_clean_cache = config.at("retry_clean_cache").value<bool>();
 
-            if (ctx.prefix_params.target_prefix.empty())
-            {
+            if (ctx.prefix_params.target_prefix.empty()) {
                 throw std::runtime_error("No active target prefix");
             }
-            if (!fs::exists(ctx.prefix_params.target_prefix) && create_env == false)
-            {
+            if (!fs::exists(ctx.prefix_params.target_prefix) && create_env == false) {
                 throw std::runtime_error(fmt::format(
-                    "Prefix does not exist at: {}",
-                    ctx.prefix_params.target_prefix.string()
+                        "Prefix does not exist at: {}",
+                        ctx.prefix_params.target_prefix.string()
                 ));
             }
 
-            MultiPackageCache package_caches{ ctx.pkgs_dirs, ctx.validation_params };
+            MultiPackageCache package_caches{ctx.pkgs_dirs, ctx.validation_params};
 
             // add channels from specs
-            for (const auto& s : specs)
-            {
-                if (auto ms = specs::MatchSpec::parse(s); ms && ms->channel().has_value())
-                {
+            for (const auto &s: specs) {
+                if (auto ms = specs::MatchSpec::parse(s); ms && ms->channel().has_value()) {
                     ctx.channels.push_back(ms->channel()->str());
                 }
             }
 
-            if (ctx.channels.empty() && !ctx.offline)
-            {
+            if (ctx.channels.empty() && !ctx.offline) {
                 LOG_WARNING << "No 'channels' specified";
             }
 
-            solver::libsolv::Database db{ channel_context.params() };
-            add_spdlog_logger_to_database(db);
-            // functions implied in 'and_then' coding-styles must return the same type
-            // which limits this syntax
-            /*auto exp_prefix_data = load_channels(pool, package_caches)
-                                   .and_then([&ctx](const auto&) { return
-               PrefixData::create(ctx.prefix_params.target_prefix); } ) .map_error([](const
-               mamba_error& err) { throw std::runtime_error(err.what());
-                                    });*/
-            auto exp_load = load_channels(ctx, channel_context, db, package_caches);
-            if (!exp_load)
-            {
-                throw std::runtime_error(exp_load.error().what());
-            }
+            // If the MAMBA_RESOLVO environment variable is set, we use the resolver
+            // specified in the variable.
+            if (const char *resolvo = std::getenv("MAMBA_RESOLVO"); resolvo) {
+                LOG_DEBUG << "Using resolvo: " << resolvo;
+                // Plug here
 
-            auto exp_prefix_data = PrefixData::create(ctx.prefix_params.target_prefix, channel_context);
-            if (!exp_prefix_data)
-            {
-                throw std::runtime_error(exp_prefix_data.error().what());
-            }
-            PrefixData& prefix_data = exp_prefix_data.value();
+                // How does one handle several channels?
 
-            load_installed_packages_in_database(ctx, db, prefix_data);
+            } else {
+                solver::libsolv::Database db{channel_context.params()};
+                add_spdlog_logger_to_database(db);
+                // functions implied in 'and_then' coding-styles must return the same type
+                // which limits this syntax
+                /*auto exp_prefix_data = load_channels(pool, package_caches)
+                                       .and_then([&ctx](const auto&) { return
+                   PrefixData::create(ctx.prefix_params.target_prefix); } ) .map_error([](const
+                   mamba_error& err) { throw std::runtime_error(err.what());
+                                        });*/
+                auto exp_load = load_channels(ctx, channel_context, db, package_caches);
+                if (!exp_load) {
+                    throw std::runtime_error(exp_load.error().what());
+                }
+
+                auto exp_prefix_data = PrefixData::create(ctx.prefix_params.target_prefix, channel_context);
+                if (!exp_prefix_data) {
+                    throw std::runtime_error(exp_prefix_data.error().what());
+                }
+                PrefixData &prefix_data = exp_prefix_data.value();
+
+                load_installed_packages_in_database(ctx, db, prefix_data);
 
 
-            auto request = create_install_request(prefix_data, specs, freeze_installed);
-            add_pins_to_request(request, ctx, prefix_data, specs, no_pin, no_py_pin);
-            request.flags = ctx.solver_flags;
+                auto request = create_install_request(prefix_data, specs, freeze_installed);
+                add_pins_to_request(request, ctx, prefix_data, specs, no_pin, no_py_pin);
+                request.flags = ctx.solver_flags;
 
-            {
-                auto out = Console::stream();
-                print_request_pins_to(request, out);
-                // Console stream prints on destruction
-            }
+                {
+                    auto out = Console::stream();
+                    print_request_pins_to(request, out);
+                    // Console stream prints on destruction
+                }
 
-            auto outcome = solver::libsolv::Solver().solve(db, request).value();
+                auto outcome = solver::libsolv::Solver().solve(db, request).value();
 
-            if (auto* unsolvable = std::get_if<solver::libsolv::UnSolvable>(&outcome))
-            {
-                unsolvable->explain_problems_to(
-                    db,
-                    LOG_ERROR,
-                    {
-                        /* .unavailable= */ ctx.graphics_params.palette.failure,
-                        /* .available= */ ctx.graphics_params.palette.success,
+                if (auto *unsolvable = std::get_if<solver::libsolv::UnSolvable>(&outcome)) {
+                    unsolvable->explain_problems_to(
+                            db,
+                            LOG_ERROR,
+                            {
+                                    /* .unavailable= */ ctx.graphics_params.palette.failure,
+                                    /* .available= */ ctx.graphics_params.palette.success,
+                            }
+                    );
+                    if (retry_clean_cache && !is_retry) {
+                        ctx.local_repodata_ttl = 2;
+                        return install_specs_impl(
+                                ctx,
+                                channel_context,
+                                config,
+                                specs,
+                                create_env,
+                                remove_prefix_on_failure,
+                                true
+                        );
                     }
-                );
-                if (retry_clean_cache && !is_retry)
-                {
-                    ctx.local_repodata_ttl = 2;
-                    return install_specs_impl(
-                        ctx,
-                        channel_context,
-                        config,
-                        specs,
-                        create_env,
-                        remove_prefix_on_failure,
-                        true
-                    );
-                }
-                if (freeze_installed)
-                {
-                    Console::instance().print("Possible hints:\n  - 'freeze_installed' is turned on\n"
+                    if (freeze_installed) {
+                        Console::instance().print("Possible hints:\n  - 'freeze_installed' is turned on\n"
+                        );
+                    }
+
+                    if (ctx.output_params.json) {
+                        Console::instance().json_write(
+                                {{"success",         false},
+                                 {"solver_problems", unsolvable->problems(db)}}
+                        );
+                    }
+                    throw mamba_error(
+                            "Could not solve for environment specs",
+                            mamba_error_code::satisfiablitity_error
                     );
                 }
 
-                if (ctx.output_params.json)
-                {
-                    Console::instance().json_write(
-                        { { "success", false }, { "solver_problems", unsolvable->problems(db) } }
+                std::vector<LockFile> locks;
+
+                for (auto &c: ctx.pkgs_dirs) {
+                    locks.push_back(LockFile(c));
+                }
+
+                Console::instance().json_write({{"success", true}});
+
+                // The point here is to delete the database before executing the transaction.
+                // The database can have high memory impact, since installing packages
+                // requires downloading, extracting, and launching Python interpreters for
+                // creating ``.pyc`` files.
+                // Ideally this whole function should be properly refactored and the transaction itself
+                // should not need the database.
+                auto trans = [&](auto db) {
+                    return MTransaction(  //
+                            ctx,
+                            db,
+                            request,
+                            std::get<solver::Solution>(outcome),
+                            package_caches
                     );
-                }
-                throw mamba_error(
-                    "Could not solve for environment specs",
-                    mamba_error_code::satisfiablitity_error
-                );
-            }
+                }(std::move(db));
 
-            std::vector<LockFile> locks;
-
-            for (auto& c : ctx.pkgs_dirs)
-            {
-                locks.push_back(LockFile(c));
-            }
-
-            Console::instance().json_write({ { "success", true } });
-
-            // The point here is to delete the database before executing the transaction.
-            // The database can have high memory impact, since installing packages
-            // requires downloading, extracting, and launching Python interpreters for
-            // creating ``.pyc`` files.
-            // Ideally this whole function should be properly refactored and the transaction itself
-            // should not need the database.
-            auto trans = [&](auto db)
-            {
-                return MTransaction(  //
-                    ctx,
-                    db,
-                    request,
-                    std::get<solver::Solution>(outcome),
-                    package_caches
-                );
-            }(std::move(db));
-
-            if (ctx.output_params.json)
-            {
-                trans.log_json();
-            }
-
-            Console::stream();
-
-            if (trans.prompt(ctx, channel_context))
-            {
-                if (create_env && !ctx.dry_run)
-                {
-                    detail::create_target_directory(ctx, ctx.prefix_params.target_prefix);
+                if (ctx.output_params.json) {
+                    trans.log_json();
                 }
 
-                trans.execute(ctx, channel_context, prefix_data);
+                Console::stream();
 
-                for (auto other_spec : config.at("others_pkg_mgrs_specs")
-                                           .value<std::vector<detail::other_pkg_mgr_spec>>())
-                {
-                    install_for_other_pkgmgr(ctx, other_spec);
-                }
-            }
-            else
-            {
-                // Aborting new env creation
-                // but the directory was already created because of `store_platform_config` call
-                // => Remove the created directory
-                if (remove_prefix_on_failure && fs::is_directory(ctx.prefix_params.target_prefix))
-                {
-                    fs::remove_all(ctx.prefix_params.target_prefix);
+                if (trans.prompt(ctx, channel_context)) {
+                    if (create_env && !ctx.dry_run) {
+                        detail::create_target_directory(ctx, ctx.prefix_params.target_prefix);
+                    }
+
+                    trans.execute(ctx, channel_context, prefix_data);
+
+                    for (auto other_spec: config.at("others_pkg_mgrs_specs")
+                            .value<std::vector<detail::other_pkg_mgr_spec>>()) {
+                        install_for_other_pkgmgr(ctx, other_spec);
+                    }
+                } else {
+                    // Aborting new env creation
+                    // but the directory was already created because of `store_platform_config` call
+                    // => Remove the created directory
+                    if (remove_prefix_on_failure && fs::is_directory(ctx.prefix_params.target_prefix)) {
+                        fs::remove_all(ctx.prefix_params.target_prefix);
+                    }
                 }
             }
         }

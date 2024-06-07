@@ -183,6 +183,7 @@ set(
     # Solver generic interface
     ${LIBMAMBA_SOURCE_DIR}/solver/helpers.cpp
     ${LIBMAMBA_SOURCE_DIR}/solver/problems_graph.cpp
+    ${LIBMAMBA_SOURCE_DIR}/solver/resolvo/solver.cpp
     # Solver libsolv implementation
     ${LIBMAMBA_SOURCE_DIR}/solver/libsolv/database.cpp
     ${LIBMAMBA_SOURCE_DIR}/solver/libsolv/helpers.cpp
@@ -416,7 +417,7 @@ include(FetchContent)
 FetchContent_Declare(
         Resolvo
         GIT_REPOSITORY https://github.com/baszalmstra/resolvo.git
-        GIT_TAG 49a80110909474e32b2b9bc9944ae7c574a2139f # feat/cpp_bindings
+        GIT_TAG 6793cce3efff9df99d23b4a597600f0a027f4c9f # feat/cpp_bindings
 )
 FetchContent_MakeAvailable(Resolvo)
 
