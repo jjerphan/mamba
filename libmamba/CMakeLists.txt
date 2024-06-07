@@ -412,6 +412,14 @@ find_package(yaml-cpp REQUIRED)
 find_package(reproc REQUIRED)
 find_package(reproc++ REQUIRED)
 find_package(Libsolv REQUIRED)
+include(FetchContent)
+FetchContent_Declare(
+        Resolvo
+        GIT_REPOSITORY https://github.com/baszalmstra/resolvo.git
+        GIT_TAG 49a80110909474e32b2b9bc9944ae7c574a2139f # feat/cpp_bindings
+)
+FetchContent_MakeAvailable(Resolvo)
+
 add_subdirectory(ext/solv-cpp)
 
 macro(libmamba_create_target target_name linkage output_name)
@@ -606,6 +614,7 @@ macro(libmamba_create_target target_name linkage output_name)
                 solv::libsolv
                 solv::libsolvext
                 solv::cpp
+                Resolvo
         )
     endif()
 
