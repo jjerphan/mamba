@@ -412,6 +412,8 @@ find_package(yaml-cpp REQUIRED)
 find_package(reproc REQUIRED)
 find_package(reproc++ REQUIRED)
 find_package(Libsolv REQUIRED)
+find_package(Resolvo REQUIRED)
+
 add_subdirectory(ext/solv-cpp)
 
 macro(libmamba_create_target target_name linkage output_name)
@@ -460,6 +462,7 @@ macro(libmamba_create_target target_name linkage output_name)
                 solv::libsolv_static
                 solv::libsolvext_static
                 solv::cpp
+                Resolvo::Resolvo
         )
 
         if(UNIX)
@@ -606,6 +609,7 @@ macro(libmamba_create_target target_name linkage output_name)
                 solv::libsolv
                 solv::libsolvext
                 solv::cpp
+                Resolvo::Resolvo
         )
     endif()
 
