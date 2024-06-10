@@ -1,5 +1,7 @@
 #include "mamba/solver/resolvo/solver.hpp"
 
+namespace mamba::solver::resolvo_cpp
+{
 /**
  * Allocates a new candidate and return the id of the candidate.
  */
@@ -141,3 +143,5 @@ PackageDatabase::get_dependencies(resolvo::SolvableId solvable)
     const auto& candidate = candidates[solvable.id];
     return candidate.dependencies;
 }
+
+}  // namespace mamba::solver::resolvo_cpp

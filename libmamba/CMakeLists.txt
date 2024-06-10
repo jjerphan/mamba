@@ -416,8 +416,8 @@ find_package(Libsolv REQUIRED)
 include(FetchContent)
 FetchContent_Declare(
         Resolvo
-        GIT_REPOSITORY https://github.com/baszalmstra/resolvo.git
-        GIT_TAG 6793cce3efff9df99d23b4a597600f0a027f4c9f # feat/cpp_bindings
+        GIT_REPOSITORY https://github.com/mamba-org/resolvo.git
+        GIT_TAG 10d75e96c92b7ecb2c766d9701563d1c99d3051b
 )
 FetchContent_MakeAvailable(Resolvo)
 

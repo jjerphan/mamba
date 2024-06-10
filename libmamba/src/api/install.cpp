@@ -548,20 +548,24 @@ namespace mamba
             // specified in the variable.
             if (const char *resolvo = std::getenv("MAMBA_RESOLVO"); resolvo) {
                 LOG_DEBUG << "Using resolvo: " << resolvo;
-                // Plug here
+                solver::resolvo_cpp::PackageDatabase package_database;
+
+                auto exp_load = load_channels_resolvo(ctx, channel_context, package_database, package_caches);
+                if (!exp_load) {
+                    throw std::runtime_error(exp_load.error().what());
+                }
+
+                auto exp_prefix_data = PrefixData::create(ctx.prefix_params.target_prefix, channel_context);
+                if (!exp_prefix_data) {
+                    throw std::runtime_error(exp_prefix_data.error().what());
+                }
 
                 // How does one handle several channels?
 
             } else {
                 solver::libsolv::Database db{channel_context.params()};
                 add_spdlog_logger_to_database(db);
-                // functions implied in 'and_then' coding-styles must return the same type
-                // which limits this syntax
-                /*auto exp_prefix_data = load_channels(pool, package_caches)
-                                       .and_then([&ctx](const auto&) { return
-                   PrefixData::create(ctx.prefix_params.target_prefix); } ) .map_error([](const
-                   mamba_error& err) { throw std::runtime_error(err.what());
-                                        });*/
+
                 auto exp_load = load_channels(ctx, channel_context, db, package_caches);
                 if (!exp_load) {
                     throw std::runtime_error(exp_load.error().what());
