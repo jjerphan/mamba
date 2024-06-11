@@ -7,17 +7,10 @@
 #include <sstream>
 #include <vector>
 
-namespace mamba::solver::libsolv
-{
-    class RepoInfo;
-
-    enum class PipAsPythonDependency : bool
-    {
-        No = false,
-        Yes = true,
-    };
-
-}
+//namespace mamba::solver::libsolv
+//{
+//    class RepoInfo;
+//}
 
 namespace mamba::solver::resolvo_cpp
 {
@@ -88,20 +81,20 @@ namespace mamba::solver::resolvo_cpp
 
 
         template <typename Iter>
-        auto add_repo_from_packages(
+        void add_repo_from_packages(
                 Iter first_package,
                 Iter last_package,
                 std::string_view name,
                 mamba::solver::libsolv::PipAsPythonDependency add
-        ) -> mamba::solver::libsolv::RepoInfo
+        )
         {
-            auto repo = add_repo_from_packages_impl_pre(name);
-            for (; first_package != last_package; ++first_package)
-            {
-                add_repo_from_packages_impl_loop(repo, *first_package);
-            }
-            add_repo_from_packages_impl_post(repo, add);
-            return repo;
+//            auto repo = add_repo_from_packages_impl_pre(name);
+//            for (; first_package != last_package; ++first_package)
+//            {
+//                add_repo_from_packages_impl_loop(repo, *first_package);
+//            }
+//            add_repo_from_packages_impl_post(repo, add);
+//            return repo;
         }
 
     };
