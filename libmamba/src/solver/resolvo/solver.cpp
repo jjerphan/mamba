@@ -135,6 +135,7 @@ namespace mamba::solver::resolvo_cpp
         for (auto solvable : solvables)
         {
             const auto& candidate = candidates[solvable.id];
+            // TODO adapt the comparison of versions, here.
             bool matches = candidate.version >= requirement.version_start
                            && candidate.version < requirement.version_end;
             if (matches != inverse)
