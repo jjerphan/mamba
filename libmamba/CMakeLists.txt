@@ -188,6 +188,7 @@ set(
     # Solver generic interface
     ${LIBMAMBA_SOURCE_DIR}/solver/helpers.cpp
     ${LIBMAMBA_SOURCE_DIR}/solver/problems_graph.cpp
+    ${LIBMAMBA_SOURCE_DIR}/solver/resolvo/solver.cpp
     # Solver libsolv implementation
     ${LIBMAMBA_SOURCE_DIR}/solver/libsolv/database.cpp
     ${LIBMAMBA_SOURCE_DIR}/solver/libsolv/helpers.cpp
