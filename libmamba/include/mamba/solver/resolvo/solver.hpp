@@ -13,6 +13,7 @@ namespace mamba::solver::resolvo_cpp
      */
     struct Candidate {
         resolvo::NameId name;
+        // TODO: use another type for version, here?
         uint32_t version;
         resolvo::Dependencies dependencies;
     };

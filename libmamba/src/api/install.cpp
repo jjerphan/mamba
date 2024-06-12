@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <stdexcept>
+#include <iostream>
 
 #include "mamba/api/channel_loader.hpp"
 #include "mamba/api/configuration.hpp"
@@ -23,6 +24,7 @@
 #include "mamba/download/downloader.hpp"
 #include "mamba/fs/filesystem.hpp"
 #include "mamba/solver/libsolv/solver.hpp"
+#include "mamba/solver/resolvo/solver.hpp"
 #include "mamba/util/path_manip.hpp"
 #include "mamba/util/string.hpp"
 
@@ -445,6 +447,7 @@ namespace mamba
             auto request = create_install_request(prefix_data, raw_specs, freeze_installed);
             add_pins_to_request(request, ctx, prefix_data, raw_specs, no_pin, no_py_pin);
             request.flags = ctx.solver_flags;
+            auto channel_params = db.channel_params();
 
             {
                 auto out = Console::stream();
@@ -452,7 +455,73 @@ namespace mamba
                 // Console stream prints on destruction
             }
 
-            auto outcome = solver::libsolv::Solver().solve(db, request).value();
+            using Outcome = std::variant<solver::Solution, solver::libsolv::UnSolvable>;
+            Outcome outcome;
+
+            // If the MAMBA_RESOLVO environment variable is set, we use the resolver
+            // specified in the variable.
+            if (true) { // const char *resolvo = std::getenv("MAMBA_RESOLVO"); resolvo) {
+                solver::resolvo_cpp::PackageDatabase db;
+                // Dill `m` using `prefix_data.m_package_record` (as the state of
+                // `mamba::solver::libsolv::DataBase` seem unreachable).
+
+                // TODO: best way to go from MatchSpec to all the possible Solvable?
+
+                // Mapping from resolvo encoding of a Solvable to the actual solvable.
+                // TODO: is `PackageInfo` the right data structure?
+                std::map<resolvo::SolvableId, specs::PackageInfo> m;
+
+                for(auto& [name, record] : prefix_data.records())
+                {
+                    resolvo::Dependencies record_deps;
+                    resolvo::Vector<resolvo::VersionSetId> requirements;
+                    resolvo::Vector<resolvo::VersionSetId> constrains;
+
+                    for (auto& dep : record.dependencies)
+                    {
+                        auto dep_ms = specs::MatchSpec::parse(dep).value();
+                        // TODO: get all the actual build for the version range which is given
+                        // for the parse MatchSpec
+                        requirements.push_back(
+                            // TODO modify this API and the associated structures used
+                            db.alloc_requirement(dep_ms.name(), dep_ms.version(), dep_ms.build_number())
+                        );
+                    }
+
+                    for (auto& cons : record.constrains)
+                    {
+                        auto cons_ms = specs::MatchSpec::parse(cons).value();
+                        constrains.push_back(
+                            // TODO modify this API and the associated structures used
+                            db.alloc_requirement(cons_ms.name(), cons_ms.version(), cons_ms.build_number())
+                        );
+                    }
+                    auto record_id = db.alloc_candidate(
+                        // TODO modify this API
+                        record.name, record.version, { requirements, constrains }
+                    );
+
+                    m[record_id] = record;
+                }
+
+                // Construct a problem to be solved by the solver
+                // TODO: likely construct those ones from `request.jobs`
+
+                resolvo::Vector<resolvo::VersionSetId> requirements = {db.alloc_requirement("a", 1, 3)};
+                resolvo::Vector<resolvo::VersionSetId> constraints = {db.alloc_requirement("b", 1, 3),
+                                                                       db.alloc_requirement("c", 1, 3)};
+
+                // Solve the problem
+                resolvo::Vector<resolvo::SolvableId> result;
+                resolvo::solve(db, requirements, constraints, result);
+
+                // TODO: convert `result` to `outcome`.
+                outcome;
+            } else
+            {
+                // Else use libsolv
+                outcome = solver::libsolv::Solver().solve(db, request).value();
+            }
 
             if (auto* unsolvable = std::get_if<solver::libsolv::UnSolvable>(&outcome))
             {
