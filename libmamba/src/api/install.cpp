@@ -461,11 +461,9 @@ namespace mamba
             // If the MAMBA_RESOLVO environment variable is set, we use the resolver
             // specified in the variable.
             if (true) { // const char *resolvo = std::getenv("MAMBA_RESOLVO"); resolvo) {
-                solver::resolvo_cpp::PackageDatabase db;
-                // Dill `m` using `prefix_data.m_package_record` (as the state of
+                solver::resolvo_cpp::PackageDatabase resolvo_db;
+                // Fill `m` using `prefix_data.m_package_record` (as the state of
                 // `mamba::solver::libsolv::DataBase` seem unreachable).
-
-                // TODO: best way to go from MatchSpec to all the possible Solvable?
 
                 // Mapping from resolvo encoding of a Solvable to the actual solvable.
                 // TODO: is `PackageInfo` the right data structure?
@@ -480,25 +478,48 @@ namespace mamba
                     for (auto& dep : record.dependencies)
                     {
                         auto dep_ms = specs::MatchSpec::parse(dep).value();
-                        // TODO: get all the actual build for the version range which is given
-                        // for the parse MatchSpec
-                        requirements.push_back(
-                            // TODO modify this API and the associated structures used
-                            db.alloc_requirement(dep_ms.name(), dep_ms.version(), dep_ms.build_number())
-                        );
+
+                        auto package_ids = db.packages_matching_ids(dep_ms);
+                        for(auto package_id: package_ids)
+                        {
+                            auto package_info = db.package_id_to_package_info(package_id);
+                            requirements.push_back(
+                                // TODO modify this API and the associated structures used
+                                resolvo_db.alloc_requirement(
+                                    package_info.name,
+                                    // Find the min and max version of the range
+                                    specs::Version::parse(package_info.version).value(),
+                                    specs::Version::parse(package_info.version).value()
+
+                                )
+                            );
+                        }
                     }
 
                     for (auto& cons : record.constrains)
                     {
                         auto cons_ms = specs::MatchSpec::parse(cons).value();
-                        constrains.push_back(
-                            // TODO modify this API and the associated structures used
-                            db.alloc_requirement(cons_ms.name(), cons_ms.version(), cons_ms.build_number())
-                        );
+
+                        auto package_ids = db.packages_matching_ids(cons_ms);
+                        for(auto package_id: package_ids)
+                        {
+                            auto package_info = db.package_id_to_package_info(package_id);
+                            requirements.push_back(
+                                // TODO modify this API and the associated structures used
+                                resolvo_db.alloc_requirement(
+                                    package_info.name,
+                                    // Find the min and max version of the range
+                                    specs::Version::parse(package_info.version).value(),
+                                    specs::Version::parse(package_info.version).value()
+                                )
+                            );
+                        }
                     }
-                    auto record_id = db.alloc_candidate(
+                    auto record_id = resolvo_db.alloc_candidate(
                         // TODO modify this API
-                        record.name, record.version, { requirements, constrains }
+                        record.name,
+                        specs::Version::parse(record.version).value(),
+                        { requirements, constrains }
                     );
 
                     m[record_id] = record;
@@ -507,15 +528,30 @@ namespace mamba
                 // Construct a problem to be solved by the solver
                 // TODO: likely construct those ones from `request.jobs`
 
-                resolvo::Vector<resolvo::VersionSetId> requirements = {db.alloc_requirement("a", 1, 3)};
-                resolvo::Vector<resolvo::VersionSetId> constraints = {db.alloc_requirement("b", 1, 3),
-                                                                       db.alloc_requirement("c", 1, 3)};
+                // db.alloc_requirement
+                resolvo::Vector<resolvo::VersionSetId> requirements;
+                resolvo::Vector<resolvo::VersionSetId> constraints;
 
                 // Solve the problem
                 resolvo::Vector<resolvo::SolvableId> result;
-                resolvo::solve(db, requirements, constraints, result);
+                resolvo::solve(resolvo_db, requirements, constraints, result);
 
                 // TODO: convert `result` to `outcome`.
+                std::vector<specs::PackageInfo> packages;
+                for(auto solvable_id: result)
+                {
+                    packages.push_back(m[solvable_id]);
+                }
+
+
+                if (request.flags.order_request)
+                {
+                    auto sorted_request = request;
+                    std::sort(sorted_request.jobs.begin(), sorted_request.jobs.end(), make_request_cmp());
+                    return solve_impl(mpool, sorted_request);
+                }
+                return solve_impl(mpool, request);
+
                 outcome;
             } else
             {

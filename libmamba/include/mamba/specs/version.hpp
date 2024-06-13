@@ -170,6 +170,9 @@ namespace mamba::specs
     {
         auto operator""_v(const char* str, std::size_t len) -> Version;
     }
+
+    auto operator<<(std::stringstream& ss, const specs::Version& ) -> std::stringstream&;
+    auto operator<<(std::basic_ostream<char>& os, const specs::Version& version) -> std::basic_ostream<char>&;
 }
 
 template <>
@@ -190,5 +193,6 @@ struct fmt::formatter<mamba::specs::Version>
 
     auto format(const ::mamba::specs::Version v, format_context& ctx) const -> decltype(ctx.out());
 };
+
 
 #endif

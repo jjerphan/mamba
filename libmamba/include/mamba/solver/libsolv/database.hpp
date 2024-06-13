@@ -140,8 +140,6 @@ namespace mamba::solver::libsolv
             friend class UnSolvable;
         };
 
-    private:
-
         struct DatabaseImpl;
 
         std::unique_ptr<DatabaseImpl> m_data;
