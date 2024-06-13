@@ -10,6 +10,7 @@
 #include <iterator>
 #include <optional>
 #include <tuple>
+#include <sstream>
 
 #include "mamba/specs/version.hpp"
 #include "mamba/util/cast.hpp"
@@ -769,6 +770,18 @@ namespace mamba::specs
                 .or_else([](ParseError&& error) { throw std::move(error); })
                 .value();
         }
+    }
+
+    auto operator<<(std::stringstream& ss, const specs::Version& version) -> std::stringstream&
+    {
+        ss << version.str();
+        return ss;
+    }
+
+    auto operator<<(std::basic_ostream<char>& os, const specs::Version& version) -> std::basic_ostream<char>&
+    {
+        os << version.str();
+        return os;
     }
 }
 

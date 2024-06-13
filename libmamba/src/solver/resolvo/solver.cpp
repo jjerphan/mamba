@@ -4,8 +4,11 @@ namespace mamba::solver::resolvo_cpp
 {
 
     resolvo::VersionSetId
-    PackageDatabase::alloc_requirement(std::string_view package, uint32_t version_start,
-                                            uint32_t version_end) {
+    PackageDatabase::alloc_requirement(
+        std::string_view package,
+        specs::Version version_start,
+        specs::Version version_end
+    ) {
         auto name_id = names.alloc(std::move(package));
         auto id = resolvo::VersionSetId{static_cast<uint32_t>(requirements.size())};
         requirements.push_back(Requirement{name_id, version_start, version_end});
@@ -14,8 +17,11 @@ namespace mamba::solver::resolvo_cpp
 
 
     resolvo::SolvableId
-    PackageDatabase::alloc_candidate(std::string_view name, uint32_t version, resolvo::Dependencies dependencies)
-    {
+    PackageDatabase::alloc_candidate(
+        std::string_view name,
+        specs::Version version,
+        resolvo::Dependencies dependencies
+    ) {
         auto name_id = names.alloc(std::move(name));
         auto id = resolvo::SolvableId{ static_cast<uint32_t>(candidates.size()) };
         candidates.push_back(Candidate{ name_id, version, dependencies });
@@ -33,7 +39,7 @@ namespace mamba::solver::resolvo_cpp
     {
         const auto& candidate = candidates[solvable.id];
         std::stringstream ss;
-        ss << names[candidate.name] << "=" << candidate.version;
+        ss << names[candidate.name]; // << "=" << candidate.version;
         return resolvo::String(ss.str());
     }
 
@@ -135,7 +141,6 @@ namespace mamba::solver::resolvo_cpp
         for (auto solvable : solvables)
         {
             const auto& candidate = candidates[solvable.id];
-            // TODO adapt the comparison of versions, here.
             bool matches = candidate.version >= requirement.version_start
                            && candidate.version < requirement.version_end;
             if (matches != inverse)

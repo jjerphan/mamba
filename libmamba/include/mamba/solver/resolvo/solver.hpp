@@ -1,10 +1,11 @@
 #pragma once
-#include <resolvo.h>
-#include <resolvo_pool.h>
-
 #include <sstream>
 #include <vector>
 
+#include <resolvo.h>
+#include <resolvo_pool.h>
+
+#include "mamba/specs/version_spec.hpp"
 
 namespace mamba::solver::resolvo_cpp
 {
@@ -13,8 +14,7 @@ namespace mamba::solver::resolvo_cpp
      */
     struct Candidate {
         resolvo::NameId name;
-        // TODO: use another type for version, here?
-        uint32_t version;
+        specs::Version version;
         resolvo::Dependencies dependencies;
     };
 
@@ -23,8 +23,8 @@ namespace mamba::solver::resolvo_cpp
      */
     struct Requirement {
         resolvo::NameId name;
-        uint32_t version_start;
-        uint32_t version_end;
+        specs::Version version_start;
+        specs::Version version_end;
     };
 
     /**
@@ -39,15 +39,21 @@ namespace mamba::solver::resolvo_cpp
         /**
          * Allocates a new requirement and return the id of the requirement.
          */
-        resolvo::VersionSetId alloc_requirement(std::string_view package, uint32_t version_start,
-                                                uint32_t version_end);
+        resolvo::VersionSetId alloc_requirement(
+            std::string_view package,
+            specs::Version version_start,
+            specs::Version version_end
+        );
 
 
         /**
          * Allocates a new candidate and return the id of the candidate.
          */
-        resolvo::SolvableId alloc_candidate(std::string_view name, uint32_t version,
-                                            resolvo::Dependencies dependencies);
+        resolvo::SolvableId alloc_candidate(
+            std::string_view name,
+            specs::Version version,
+            resolvo::Dependencies dependencies
+        );
 
         resolvo::String display_name(resolvo::NameId name) override;
 
