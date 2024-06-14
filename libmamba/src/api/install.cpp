@@ -6,6 +6,7 @@
 
 #include <stdexcept>
 #include <iostream>
+#include <variant>
 
 #include <fmt/color.h>
 #include <fmt/format.h>
@@ -576,6 +577,7 @@ namespace mamba
             load_installed_packages_in_database(ctx, db, prefix_data);
 
 
+            // Request :: SolverTask for rattler / resolvo
             auto request = create_install_request(prefix_data, specs, freeze_installed);
             add_pins_to_request(request, ctx, prefix_data, specs, no_pin, no_py_pin);
             request.flags = ctx.solver_flags;
@@ -590,16 +592,14 @@ namespace mamba
             using Outcome = std::variant<solver::Solution, solver::libsolv::UnSolvable>;
             Outcome outcome;
 
-            // If the MAMBA_RESOLVO environment variable is set, we use the resolver
-            // specified in the variable.
             if (true) { // const char *resolvo = std::getenv("MAMBA_RESOLVO"); resolvo) {
                 solver::resolvo_cpp::PackageDatabase resolvo_db;
                 // Fill `m` using `prefix_data.m_package_record` (as the state of
                 // `mamba::solver::libsolv::DataBase` seem unreachable).
 
                 // Mapping from resolvo encoding of a Solvable to the actual solvable.
-                // TODO: is `PackageInfo` the right data structure?
-                std::map<resolvo::SolvableId, specs::PackageInfo> m;
+                // uint32_t: decltype(resolvo::SolvableId.id)
+                std::map<uint32_t, specs::PackageInfo> m;
 
                 for(auto& [name, record] : prefix_data.records())
                 {
@@ -622,7 +622,6 @@ namespace mamba
                                     // Find the min and max version of the range
                                     specs::Version::parse(package_info.version).value(),
                                     specs::Version::parse(package_info.version).value()
-
                                 )
                             );
                         }
@@ -654,7 +653,7 @@ namespace mamba
                         { requirements, constrains }
                     );
 
-                    m[record_id] = record;
+                    m[record_id.id] = record;
                 }
 
                 // Construct a problem to be solved by the solver
@@ -666,28 +665,26 @@ namespace mamba
 
                 // Solve the problem
                 resolvo::Vector<resolvo::SolvableId> result;
-                resolvo::solve(resolvo_db, requirements, constraints, result);
+                resolvo::String resolvo_solver_result = resolvo::solve(resolvo_db, requirements, constraints, result);
 
-                // TODO: convert `result` to `outcome`.
-                std::vector<specs::PackageInfo> packages;
-                for(auto solvable_id: result)
-                {
-                    packages.push_back(m[solvable_id]);
+                if (resolvo_solver_result == "")
+                {  // Success
+                    solver::Solution solution;
+
+                    for (auto solvable_id: result)
+                    {
+                        specs::PackageInfo& solvable_package_info = m[solvable_id.id];
+                        solution.actions.push_back(solver::Solution::Install{solvable_package_info});
+                    }
+
+                    outcome = solution;
+                } else
+                {  // Failure
+                    outcome = solver::Solution{};
                 }
-
-
-                if (request.flags.order_request)
-                {
-                    auto sorted_request = request;
-                    std::sort(sorted_request.jobs.begin(), sorted_request.jobs.end(), make_request_cmp());
-                    return solve_impl(mpool, sorted_request);
-                }
-                return solve_impl(mpool, request);
-
-                outcome;
             } else
             {
-                // Else use libsolv
+                // Use libsolv
                 outcome = solver::libsolv::Solver().solve(db, request).value();
             }
 
