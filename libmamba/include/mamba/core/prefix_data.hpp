@@ -22,6 +22,7 @@ namespace mamba
     {
     public:
 
+        // MatchSpec as String -> PackageInfo
         using package_map = std::map<std::string, specs::PackageInfo>;
 
         static expected_t<PrefixData>
