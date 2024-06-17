@@ -191,6 +191,11 @@ set(
     ${LIBMAMBA_SOURCE_DIR}/solver/libsolv/repo_info.cpp
     ${LIBMAMBA_SOURCE_DIR}/solver/libsolv/solver.cpp
     ${LIBMAMBA_SOURCE_DIR}/solver/libsolv/unsolvable.cpp
+    # Implementation of resolvo solver
+    ${LIBMAMBA_SOURCE_DIR}/solver/resolvo/database.cpp
+    ${LIBMAMBA_SOURCE_DIR}/solver/resolvo/parameters.cpp
+    ${LIBMAMBA_SOURCE_DIR}/solver/resolvo/repo_info.cpp
+    ${LIBMAMBA_SOURCE_DIR}/solver/resolvo/helpers.cpp
     # Artifacts validation
     ${LIBMAMBA_SOURCE_DIR}/validation/tools.cpp
     ${LIBMAMBA_SOURCE_DIR}/validation/errors.cpp
