@@ -249,7 +249,7 @@ namespace mamba
                 this->output_params.logging_level = log_level::info;
                 break;
         }
-        spdlog::set_level(convert_log_level(output_params.logging_level));
+        spdlog::set_level(convert_log_level(log_level::info));
     }
 
     void Context::set_log_level(log_level level)

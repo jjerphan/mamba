@@ -4,20 +4,15 @@
 //
 // The full license is in the file LICENSE, distributed with this software.
 
-#include <array>
-#include <type_traits>
-#include <variant>
-#include <vector>
+#include <iostream>
 
 #include <doctest/doctest.h>
 
 #include "mamba/fs/filesystem.hpp"
-#include "mamba/solver/libsolv/database.hpp"
-#include "mamba/solver/libsolv/solver.hpp"
 #include "mamba/specs/channel.hpp"
-#include "mamba/specs/match_spec.hpp"
 #include "mamba/specs/package_info.hpp"
-#include "mamba/util/string.hpp"
+
+#include "solver/resolvo/helpers.hpp"
 
 #include "mambatests.hpp"
 
@@ -28,7 +23,14 @@ TEST_SUITE("solver::solution")
 {
     using PackageInfo = specs::PackageInfo;
 
-    TEST_CASE("Just a test case") {
-
+    TEST_CASE("Resolvo_load") {
+        std::cout << "Loading repodata.json" << std::endl;
+        solver::resolvo_cpp::mamba_read_json(
+            fs::u8path("/tmp/repodata.json"),
+            "https://repo.anaconda.com/pkgs/main",
+            "main",
+            solver::resolvo_cpp::PackageTypes::CondaOrElseTarBz2,
+            true
+        );
     }
 }

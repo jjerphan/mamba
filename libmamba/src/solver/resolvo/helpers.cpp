@@ -26,8 +26,119 @@
 
 #define MAMBA_TOOL_VERSION "2.0"
 
+// TODO: remove the code duplication which is present in `mamba/solver/libsolv`
+
 namespace mamba::solver::resolvo_cpp
 {
+
+    template <typename Filter, typename OnParsed>
+    void set_repo_solvables_impl(
+        ResolvoDatabase& resolvo_db,
+        const specs::CondaURL& repo_url,
+        const std::string& channel_id,
+        const std::string& default_subdir,
+        const simdjson::dom::object& packages,
+        const std::optional<simdjson::dom::object>& signatures,
+        Filter&& filter,
+        OnParsed&& on_parsed
+    )
+    {
+        std::string filename = {};
+        for (const auto& [fn, pkg] : packages)
+        {
+            if (filter(fn))
+            {
+                auto [id, solv] = resolvo_db.add_solvable();
+                filename = fn;
+
+                const bool parsed = set_solvable(
+                    pool,
+                    repo_url,
+                    channel_id,
+                    solv,
+                    filename,
+                    pkg,
+                    signatures,
+                    default_subdir
+                );
+                if (parsed)
+                {
+                    on_parsed(fn);
+                    LOG_DEBUG << "Adding package record to repo " << fn;
+                }
+                else
+                {
+                    repo.remove_solvable(id, /* reuse_id= */ true);
+                    LOG_WARNING << "Failed to parse from repodata " << fn;
+                }
+            }
+        }
+    }
+
+
+    void set_repo_solvables(
+        const specs::CondaURL& repo_url,
+        const std::string& channel_id,
+        const std::string& default_subdir,
+        const simdjson::dom::object& packages,
+        const std::optional<simdjson::dom::object>& signatures
+    )
+    {
+        return set_repo_solvables_impl(
+            repo_url,
+            channel_id,
+            default_subdir,
+            packages,
+            signatures,
+            /* filter= */ [](const auto&) { return true; },
+            /* on_parsed= */ [](const auto&) {}
+        );
+    }
+
+
+    void set_repo_solvables_and_return_added_filename_stem(
+        const specs::CondaURL& repo_url,
+        const std::string& channel_id,
+        const std::string& default_subdir,
+        const simdjson::dom::object& packages,
+        const std::optional<simdjson::dom::object>& signatures
+    )
+    {
+        auto filenames = std::vector<std::string_view>();
+        set_repo_solvables_impl(
+            repo_url,
+            channel_id,
+            default_subdir,
+            packages,
+            signatures,
+            /* filter= */ [](const auto&) { return true; },
+            /* on_parsed= */ [&](const auto& fn)
+            { filenames.push_back(specs::strip_archive_extension(fn)); }
+        );
+        // Sort only once
+        // return util::flat_set<std::string_view>{ std::move(filenames) };
+    }
+
+    void set_repo_solvables_if_not_already_set(
+        const specs::CondaURL& repo_url,
+        const std::string& channel_id,
+        const std::string& default_subdir,
+        const simdjson::dom::object& packages,
+        const std::optional<simdjson::dom::object>& signatures,
+        const util::flat_set<std::string_view>& added
+    )
+    {
+        return set_repo_solvables_impl(
+            repo_url,
+            channel_id,
+            default_subdir,
+            packages,
+            signatures,
+            /* filter= */ [&](const auto& fn)
+            { return !added.contains(specs::strip_archive_extension(fn)); },
+            /* on_parsed= */ [&](const auto&) {}
+        );
+    }
 
     void mamba_read_json(
         const fs::u8path& filename,
@@ -81,11 +192,24 @@ namespace mamba::solver::resolvo_cpp
             auto added = util::flat_set<std::string_view>();
             if (auto pkgs = repodata["packages.conda"].get_object(); !pkgs.error())
             {
-                std::cout << "CondaOrElseTarBz2 (packages.conda)" << std::endl;
+                added = set_repo_solvables_and_return_added_filename_stem(
+                    parsed_url,
+                    channel_id,
+                    default_subdir,
+                    pkgs.value(),
+                    signatures
+                );
             }
             if (auto pkgs = repodata["packages"].get_object(); !pkgs.error())
             {
-                std::cout << "CondaOrElseTarBz2 (packages)" << std::endl;
+                set_repo_solvables_if_not_already_set(
+                    parsed_url,
+                    channel_id,
+                    default_subdir,
+                    pkgs.value(),
+                    signatures,
+                    added
+                );
             }
         }
         else
@@ -93,13 +217,25 @@ namespace mamba::solver::resolvo_cpp
             if (auto pkgs = repodata["packages"].get_object();
                 !pkgs.error() && (package_types != PackageTypes::CondaOnly))
             {
-                std::cout << "CondaOrElseTarBz2 (packages)" << std::endl;
+                set_repo_solvables(
+                    parsed_url,
+                    channel_id,
+                    default_subdir,
+                    pkgs.value(),
+                    signatures
+                );
             }
 
             if (auto pkgs = repodata["packages.conda"].get_object();
                 !pkgs.error() && (package_types != PackageTypes::TarBz2Only))
             {
-                std::cout << "CondaOrElseTarBz2 (packages.conda)" << std::endl;
+                set_repo_solvables(
+                    parsed_url,
+                    channel_id,
+                    default_subdir,
+                    pkgs.value(),
+                    signatures
+                );
             }
         }
     }

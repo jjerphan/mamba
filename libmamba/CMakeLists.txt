@@ -192,10 +192,10 @@ set(
     ${LIBMAMBA_SOURCE_DIR}/solver/libsolv/solver.cpp
     ${LIBMAMBA_SOURCE_DIR}/solver/libsolv/unsolvable.cpp
     # Implementation of resolvo solver
-    ${LIBMAMBA_SOURCE_DIR}/solver/resolvo/database.cpp
     ${LIBMAMBA_SOURCE_DIR}/solver/resolvo/parameters.cpp
     ${LIBMAMBA_SOURCE_DIR}/solver/resolvo/repo_info.cpp
     ${LIBMAMBA_SOURCE_DIR}/solver/resolvo/helpers.cpp
+    ${LIBMAMBA_SOURCE_DIR}/solver/resolvo/solver.cpp
     # Artifacts validation
     ${LIBMAMBA_SOURCE_DIR}/validation/tools.cpp
     ${LIBMAMBA_SOURCE_DIR}/validation/errors.cpp
@@ -336,6 +336,12 @@ set(
     ${LIBMAMBA_INCLUDE_DIR}/mamba/solver/libsolv/repo_info.hpp
     ${LIBMAMBA_INCLUDE_DIR}/mamba/solver/libsolv/solver.hpp
     ${LIBMAMBA_INCLUDE_DIR}/mamba/solver/libsolv/unsolvable.hpp
+    # Implementation of resolvo solver
+    ${LIBMAMBA_INCLUDE_DIR}/mamba/solver/resolvo/database.hpp
+    ${LIBMAMBA_INCLUDE_DIR}/mamba/solver/resolvo/parameters.hpp
+    ${LIBMAMBA_INCLUDE_DIR}/mamba/solver/resolvo/repo_info.hpp
+    ${LIBMAMBA_INCLUDE_DIR}/mamba/solver/resolvo/pool.hpp
+    ${LIBMAMBA_INCLUDE_DIR}/mamba/solver/resolvo/solver.hpp
     # Artifacts validation
     ${LIBMAMBA_INCLUDE_DIR}/mamba/validation/tools.hpp
     ${LIBMAMBA_INCLUDE_DIR}/mamba/validation/errors.hpp

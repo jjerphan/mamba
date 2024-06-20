@@ -9,6 +9,7 @@
 
 #include <iosfwd>
 #include <sstream>
+#include <iostream>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -199,7 +200,7 @@ namespace mamba
 #undef LOG_ERROR
 #undef LOG_CRITICAL
 
-#define LOG(severity) mamba::MessageLogger(__FILE__, __LINE__, severity).stream()
+#define LOG(severity) std::cout
 #define LOG_TRACE LOG(mamba::log_level::trace)
 #define LOG_DEBUG LOG(mamba::log_level::debug)
 #define LOG_INFO LOG(mamba::log_level::info)
