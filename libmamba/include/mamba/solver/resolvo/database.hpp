@@ -82,9 +82,6 @@ namespace mamba::solver::resolvo_cpp
             std::string_view name = ""
         );
 
-        struct DatabaseImpl;
-
-        std::unique_ptr<DatabaseImpl> m_data;
 
     };
 

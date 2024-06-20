@@ -22,6 +22,8 @@
 #include "mamba/specs/match_spec.hpp"
 #include "mamba/util/random.hpp"
 
+#include "solver/resolvo/helpers.hpp"
+
 namespace mamba::solver::resolvo_cpp
 {
 
@@ -38,42 +40,16 @@ namespace mamba::solver::resolvo_cpp
 
         if (!fs::exists(path))
         {
-            return make_unexpected(
-                fmt::format(R"(File "{}" does not exist)", path),
-                mamba_error_code::repodata_not_loaded
-            );
+            throw std::runtime_error(fmt::format(R"(File "{}" does not exist)", path));
         }
-        auto repo = add_repo(url).second;
-        repo.set_url(std::string(url));
 
-        auto make_repo = [&]() -> expected_t<solv::ObjRepoView>
-        {
-            if (parser == RepodataParser::Mamba)
-            {
-                return mamba_read_json(
-                    repo,
-                    path,
-                    std::string(url),
-                    channel_id,
-                    package_types,
-                    verify_artifacts
-                );
-            }
-        };
-
-        return make_repo()
-            .transform(
-                [&]() -> RepoInfo
-                {
-                    if (add == PipAsPythonDependency::Yes)
-                    {
-                        add_pip_as_python_dependency(p_repo);
-                    }
-                    p_repo.internalize();
-                    return RepoInfo{ p_repo.raw() };
-                }
-            )
-            .or_else([&](const auto&) { pool().remove_repo(repo.id(), /* reuse_ids= */ true); });
+        return mamba_read_json(
+            path,
+            std::string(url),
+            channel_id,
+            package_types,
+            verify_artifacts
+        );
     }
 
     template <typename Iter>

@@ -59,6 +59,8 @@ set(
     # Solver libsolv implementation tests
     src/solver/libsolv/test_database.cpp
     src/solver/libsolv/test_solver.cpp
+    # Solver resolvo implementation tests
+    src/solver/resolvo/test_solver.cpp
     # Artifacts validation
     src/validation/test_tools.cpp
     src/validation/test_update_framework_v0_6.cpp
