@@ -11,10 +11,14 @@
 #include <optional>
 #include <string_view>
 
+#include <resolvo/resolvo_dependency_provider.h>
+#include <resolvo/resolvo_pool.h>
+
 #include "mamba/core/error_handling.hpp"
 #include "mamba/solver/resolvo/parameters.hpp"
 #include "mamba/specs/channel.hpp"
 #include "mamba/specs/package_info.hpp"
+#include "mamba/specs/version.hpp"
 #include "mamba/util/loop_control.hpp"
 
 namespace mamba
@@ -46,20 +50,38 @@ namespace mamba::solver::resolvo_cpp
     class Solver;
     class UnSolvable;
 
-    class Database
+    /**
+     * A single candidate for a package.
+     */
+    struct Candidate {
+        resolvo::NameId name;
+        specs::Version version;
+        resolvo::Dependencies dependencies;
+    };
+
+    /**
+     * A requirement for a package.
+     */
+    struct Requirement {
+        resolvo::NameId name;
+        specs::Version version_start;
+        specs::Version version_end;
+    };
+
+    class ResolvoDatabase : public resolvo::DependencyProvider
     {
     public:
 
         using logger_type = std::function<void(LogLevel, std::string_view)>;
 
-        explicit Database(specs::ChannelResolveParams channel_params);
-        Database(const Database&) = delete;
-        Database(Database&&);
+        explicit ResolvoDatabase(specs::ChannelResolveParams channel_params);
+        ResolvoDatabase(const ResolvoDatabase&) = delete;
+        ResolvoDatabase(ResolvoDatabase&&);
 
-        ~Database();
+        ~ResolvoDatabase();
 
-        auto operator=(const Database&) -> Database& = delete;
-        auto operator=(Database&&) -> Database&;
+        auto operator=(const ResolvoDatabase&) -> ResolvoDatabase& = delete;
+        auto operator=(ResolvoDatabase&&) -> ResolvoDatabase&;
 
         [[nodiscard]] auto channel_params() const -> const specs::ChannelResolveParams&;
 
@@ -82,6 +104,12 @@ namespace mamba::solver::resolvo_cpp
             std::string_view name = ""
         );
 
+    private:
+
+        resolvo::Pool<resolvo::NameId, resolvo::String> names;
+        resolvo::Pool<resolvo::StringId, resolvo::String> strings;
+        std::vector<Candidate> candidates;
+        std::vector<Requirement> requirements;
 
     };
 

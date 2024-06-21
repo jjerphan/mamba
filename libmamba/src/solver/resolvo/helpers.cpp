@@ -11,9 +11,9 @@
 
 #include <simdjson.h>
 
-
 #include "mamba/core/output.hpp"
 #include "mamba/core/util.hpp"
+#include "mamba/solver/resolvo/database.hpp"
 #include "mamba/specs/archive.hpp"
 #include "mamba/specs/conda_url.hpp"
 #include "mamba/util/cfile.hpp"
@@ -51,16 +51,7 @@ namespace mamba::solver::resolvo_cpp
                 auto [id, solv] = resolvo_db.add_solvable();
                 filename = fn;
 
-                const bool parsed = set_solvable(
-                    pool,
-                    repo_url,
-                    channel_id,
-                    solv,
-                    filename,
-                    pkg,
-                    signatures,
-                    default_subdir
-                );
+                // resolvo_db.
                 if (parsed)
                 {
                     on_parsed(fn);
@@ -68,7 +59,6 @@ namespace mamba::solver::resolvo_cpp
                 }
                 else
                 {
-                    repo.remove_solvable(id, /* reuse_id= */ true);
                     LOG_WARNING << "Failed to parse from repodata " << fn;
                 }
             }
@@ -77,6 +67,7 @@ namespace mamba::solver::resolvo_cpp
 
 
     void set_repo_solvables(
+        ResolvoDatabase& resolvo_db,
         const specs::CondaURL& repo_url,
         const std::string& channel_id,
         const std::string& default_subdir,
@@ -85,6 +76,7 @@ namespace mamba::solver::resolvo_cpp
     )
     {
         return set_repo_solvables_impl(
+            resolvo_db,
             repo_url,
             channel_id,
             default_subdir,
@@ -97,6 +89,7 @@ namespace mamba::solver::resolvo_cpp
 
 
     void set_repo_solvables_and_return_added_filename_stem(
+        ResolvoDatabase& resolvo_db,
         const specs::CondaURL& repo_url,
         const std::string& channel_id,
         const std::string& default_subdir,
@@ -106,6 +99,7 @@ namespace mamba::solver::resolvo_cpp
     {
         auto filenames = std::vector<std::string_view>();
         set_repo_solvables_impl(
+            resolvo_db,
             repo_url,
             channel_id,
             default_subdir,
@@ -120,6 +114,7 @@ namespace mamba::solver::resolvo_cpp
     }
 
     void set_repo_solvables_if_not_already_set(
+        ResolvoDatabase& resolvo_db,
         const specs::CondaURL& repo_url,
         const std::string& channel_id,
         const std::string& default_subdir,
@@ -129,6 +124,7 @@ namespace mamba::solver::resolvo_cpp
     )
     {
         return set_repo_solvables_impl(
+            resolvo_db,
             repo_url,
             channel_id,
             default_subdir,
@@ -141,6 +137,7 @@ namespace mamba::solver::resolvo_cpp
     }
 
     void mamba_read_json(
+        ResolvoDatabase& resolvo_db,
         const fs::u8path& filename,
         const std::string& repo_url,
         const std::string& channel_id,
@@ -193,6 +190,7 @@ namespace mamba::solver::resolvo_cpp
             if (auto pkgs = repodata["packages.conda"].get_object(); !pkgs.error())
             {
                 added = set_repo_solvables_and_return_added_filename_stem(
+                    resolvo_db,
                     parsed_url,
                     channel_id,
                     default_subdir,
@@ -203,6 +201,7 @@ namespace mamba::solver::resolvo_cpp
             if (auto pkgs = repodata["packages"].get_object(); !pkgs.error())
             {
                 set_repo_solvables_if_not_already_set(
+                    resolvo_db,
                     parsed_url,
                     channel_id,
                     default_subdir,
@@ -218,6 +217,7 @@ namespace mamba::solver::resolvo_cpp
                 !pkgs.error() && (package_types != PackageTypes::CondaOnly))
             {
                 set_repo_solvables(
+                    resolvo_db,
                     parsed_url,
                     channel_id,
                     default_subdir,
@@ -230,6 +230,7 @@ namespace mamba::solver::resolvo_cpp
                 !pkgs.error() && (package_types != PackageTypes::TarBz2Only))
             {
                 set_repo_solvables(
+                    resolvo_db,
                     parsed_url,
                     channel_id,
                     default_subdir,
