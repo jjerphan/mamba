@@ -17,6 +17,7 @@
 #include "mamba/specs/error.hpp"
 #include "mamba/specs/platform.hpp"
 #include "mamba/util/flat_set.hpp"
+#include "mamba/util/tuple_hash.hpp"
 
 namespace mamba::specs
 {
@@ -145,6 +146,19 @@ struct fmt::formatter<mamba::specs::UnresolvedChannel>
     }
 
     auto format(const UnresolvedChannel& uc, format_context& ctx) const -> format_context::iterator;
+};
+
+template <>
+struct std::hash<mamba::specs::UnresolvedChannel>
+{
+    auto operator()(const mamba::specs::UnresolvedChannel& uc) const -> std::size_t
+    {
+        auto seed = std::size_t{0};
+        seed = mamba::util::hash_combine_val(seed, uc.location());
+        seed = mamba::util::hash_combine_val(seed, uc.platform_filters());
+        seed = mamba::util::hash_combine_val(seed, static_cast<int>(uc.type()));
+        return seed;
+    }
 };
 
 #endif

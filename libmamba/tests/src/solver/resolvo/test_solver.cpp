@@ -22,6 +22,21 @@ using namespace mamba::solver;
 
 using namespace resolvo;
 
+template <>
+struct std::hash<VersionSetId> {
+    std::size_t operator()(const VersionSetId& id) const {
+        return std::hash<uint32_t>{}(id.id);
+    }
+};
+
+template <>
+struct std::hash<SolvableId> {
+    std::size_t operator()(const SolvableId& id) const {
+        return std::hash<uint32_t>{}(id.id);
+    }
+};
+
+
 struct PackageDatabase : public DependencyProvider {
 
     Pool<NameId, String> names;
@@ -170,13 +185,13 @@ struct PackageDatabase : public DependencyProvider {
      * Returns the dependencies for the specified solvable.
      */
     virtual Dependencies get_dependencies(SolvableId solvable) {
-        const PackageInfo& package_info = solvables[solvable.id];
-        Dependencies dependencies;
-        for (auto& dep : package_info.dependencies) {
-            dependencies.requirements.push_back(dep);
-        }
-
-        return {Vector(package.dependencies.begin(), package.dependencies.end()), Vector{package.constrains}};
+//        const PackageInfo& package_info = [solvable];
+//        Dependencies dependencies;
+//        for (auto& dep : package_info.dependencies) {
+//            dependencies.requirements.push_back(dep);
+//        }
+//
+//        return {Vector(package.dependencies.begin(), package.dependencies.end()), Vector{package.constrains}};
     }
 
 
@@ -188,7 +203,7 @@ TEST_SUITE("solver::resolvo")
 
     TEST_CASE("Simple resolution problem") {
 
-        PackageDatabase database;
+        // PackageDatabase database;
 
         // Create a PackageInfo for scikit-learn
         PackageInfo scikit_learn("scikit-learn", "1.5.0", "py310h981052a_1", 1);

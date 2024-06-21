@@ -15,6 +15,7 @@
 #include "mamba/specs/error.hpp"
 #include "mamba/specs/glob_spec.hpp"
 #include "mamba/specs/regex_spec.hpp"
+#include "mamba/util/tuple_hash.hpp"
 
 namespace mamba::specs
 {
@@ -72,6 +73,17 @@ struct fmt::formatter<mamba::specs::ChimeraStringSpec>
 
     auto
     format(const ::mamba::specs::ChimeraStringSpec& spec, format_context& ctx) -> decltype(ctx.out());
+};
+
+template <>
+struct std::hash<mamba::specs::ChimeraStringSpec>
+{
+    auto operator()(const mamba::specs::ChimeraStringSpec& spec) const -> std::size_t
+    {
+        auto seed = std::size_t(0);
+        seed = mamba::util::hash_combine_val(seed, spec.str());
+        return seed;
+    }
 };
 
 #endif

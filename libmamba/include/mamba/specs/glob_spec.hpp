@@ -65,4 +65,13 @@ struct fmt::formatter<mamba::specs::GlobSpec>
     auto format(const ::mamba::specs::GlobSpec& spec, format_context& ctx) -> decltype(ctx.out());
 };
 
+template <>
+struct std::hash<mamba::specs::GlobSpec>
+{
+    auto operator()(const mamba::specs::GlobSpec& spec) const -> std::size_t
+    {
+        return std::hash<std::string>{}(spec.str());
+    }
+};
+
 #endif

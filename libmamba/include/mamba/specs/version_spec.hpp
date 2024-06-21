@@ -17,6 +17,8 @@
 #include "mamba/specs/error.hpp"
 #include "mamba/specs/version.hpp"
 #include "mamba/util/flat_bool_expr_tree.hpp"
+#include "mamba/util/tuple_hash.hpp"
+
 
 namespace mamba::specs
 {
@@ -242,4 +244,27 @@ struct fmt::formatter<mamba::specs::VersionSpec>
 
     auto format(const ::mamba::specs::VersionSpec& spec, format_context& ctx) -> decltype(ctx.out());
 };
+
+template <>
+struct std::hash<mamba::specs::VersionPredicate>
+{
+    auto operator()(const mamba::specs::VersionPredicate& pred) const -> std::size_t
+    {
+        auto seed = std::size_t{0};
+        seed = mamba::util::hash_combine_val(seed, pred.str());
+        return seed;
+    }
+};
+
+template <>
+struct std::hash<mamba::specs::VersionSpec>
+{
+    auto operator()(const mamba::specs::VersionSpec& spec) const -> std::size_t
+    {
+        auto seed = std::size_t{0};
+        seed = mamba::util::hash_combine_val(seed, spec.str());
+        return seed;
+    }
+};
+
 #endif

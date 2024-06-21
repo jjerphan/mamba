@@ -22,6 +22,7 @@
 #include "mamba/specs/version_spec.hpp"
 #include "mamba/util/flat_set.hpp"
 #include "mamba/util/heap_optional.hpp"
+#include "mamba/util/tuple_hash.hpp"
 
 namespace mamba::specs
 {
@@ -286,4 +287,23 @@ namespace mamba::specs
         return true;
     }
 }
+
+template <>
+struct std::hash<mamba::specs::MatchSpec>
+{
+    auto operator()(const mamba::specs::MatchSpec& spec) const -> std::size_t
+    {
+        auto seed = std::size_t(0);
+        seed = mamba::util::hash_combine_val(seed, spec.channel());
+        seed = mamba::util::hash_combine_val(seed, spec.version());
+        seed = mamba::util::hash_combine_val(seed, spec.name());
+        seed = mamba::util::hash_combine_val(seed, spec.build_string());
+        seed = mamba::util::hash_combine_val(seed, spec.name_space());
+        seed = mamba::util::hash_combine_val(seed, spec.build_number());
+        // TODO: make this public.
+        // seed = mamba::util::hash_combine_val(seed, spec.extra());
+        return seed;
+    }
+};
+
 #endif
