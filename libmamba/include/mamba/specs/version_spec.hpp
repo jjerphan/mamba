@@ -195,6 +195,14 @@ namespace mamba::specs
          */
         [[nodiscard]] auto expression_size() const -> std::size_t;
 
+        [[nodiscard]] auto operator==(const VersionSpec& other) const -> bool {
+            return m_tree == other.m_tree;
+        }
+
+        [[nodiscard]] auto operator!=(const VersionSpec& other) const -> bool {
+            return !(*this == other);
+        }
+
     private:
 
         tree_type m_tree;

@@ -124,6 +124,14 @@ namespace mamba::specs
          */
         [[nodiscard]] auto contains(BuildNumber point) const -> bool;
 
+        [[nodiscard]] auto operator==(const BuildNumberSpec& other) const -> bool {
+            return m_predicate == other.m_predicate;
+        }
+
+        [[nodiscard]] auto operator!=(const BuildNumberSpec& other) const -> bool {
+            return !(*this == other);
+        }
+
     private:
 
         BuildNumberPredicate m_predicate;

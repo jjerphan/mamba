@@ -51,6 +51,14 @@ namespace mamba::specs
 
         [[nodiscard]] auto str() const -> const std::string&;
 
+        [[nodiscard]] auto operator==(const ChimeraStringSpec& other) const -> bool {
+            return m_spec == other.m_spec;
+        }
+
+        [[nodiscard]] auto operator!=(const ChimeraStringSpec& other) const -> bool {
+            return !(*this == other);
+        }
+
     private:
 
         Chimera m_spec;

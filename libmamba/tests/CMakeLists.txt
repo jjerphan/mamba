@@ -88,6 +88,7 @@ set(
     src/core/test_invoke.cpp
     src/core/test_tasksync.cpp
     src/core/test_filesystem.cpp
+        src/solver/resolvo/test_solver.cpp
 )
 
 message(STATUS "Building libmamba C++ tests")

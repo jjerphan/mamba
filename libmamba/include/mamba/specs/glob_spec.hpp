@@ -43,6 +43,14 @@ namespace mamba::specs
 
         [[nodiscard]] auto str() const -> const std::string&;
 
+        [[nodiscard]] auto operator==(const GlobSpec& other) const -> bool {
+            return m_pattern == other.m_pattern;
+        }
+
+        [[nodiscard]] auto operator!=(const GlobSpec& other) const -> bool {
+            return !(*this == other);
+        }
+
     private:
 
         std::string m_pattern = std::string(free_pattern);

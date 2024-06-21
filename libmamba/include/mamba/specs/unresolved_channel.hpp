@@ -111,6 +111,16 @@ namespace mamba::specs
 
         [[nodiscard]] auto str() const -> std::string;
 
+        [[nodiscard]] auto operator==(const UnresolvedChannel& other) const -> bool {
+            return m_location == other.m_location
+                && m_platform_filters == other.m_platform_filters
+                && m_type == other.m_type;
+        }
+
+        [[nodiscard]] auto operator!=(const UnresolvedChannel& other) const -> bool {
+            return !(*this == other);
+        }
+
     private:
 
         std::string m_location = std::string(unknown_channel);

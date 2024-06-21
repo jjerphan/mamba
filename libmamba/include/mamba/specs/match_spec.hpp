@@ -135,6 +135,21 @@ namespace mamba::specs
          */
         [[nodiscard]] auto contains_except_channel(const PackageInfo& pkg) const -> bool;
 
+        // Equality operators
+        auto operator==(const MatchSpec& other) const -> bool {
+            return m_channel == other.m_channel
+                && m_version == other.m_version
+                && m_name == other.m_name
+                && m_build_string == other.m_build_string
+                && m_name_space == other.m_name_space
+                && m_build_number == other.m_build_number
+                && m_extra == other.m_extra;
+        }
+
+        auto operator!=(const MatchSpec& other) const -> bool {
+            return !(*this == other);
+        }
+
     private:
 
         struct ExtraMembers
@@ -150,6 +165,22 @@ namespace mamba::specs
             std::string features = {};
             string_set track_features = {};
             bool optional = false;
+
+            [[nodiscard]] auto operator==(const ExtraMembers& other) const -> bool {
+                return filename == other.filename
+                    && subdirs == other.subdirs
+                    && md5 == other.md5
+                    && sha256 == other.sha256
+                    && license == other.license
+                    && license_family == other.license_family
+                    && features == other.features
+                    && track_features == other.track_features
+                    && optional == other.optional;
+            }
+
+            [[nodiscard]] auto operator!=(const ExtraMembers& other) const -> bool {
+                return !(*this == other);
+            }
         };
 
         std::optional<UnresolvedChannel> m_channel;
