@@ -110,7 +110,7 @@ find_package(Threads REQUIRED)
 target_link_libraries(
     test_libmamba
     PUBLIC mamba::libmamba reproc reproc++
-    PRIVATE doctest::doctest Threads::Threads
+    PRIVATE doctest::doctest Threads::Threads Resolvo::Resolvo
 )
 
 # Copy data directory into binary dir to avoid modifications
