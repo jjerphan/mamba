@@ -11,8 +11,14 @@
 #include <resolvo/resolvo_dependency_provider.h>
 #include <resolvo/resolvo_pool.h>
 
+#include <simdjson.h>
+
+#include "mamba/core/util.hpp"  // for LockFile
 #include "mamba/specs/channel.hpp"
 #include "mamba/specs/package_info.hpp"
+
+// TODO: move PackageTypes and MAX_CONDA_TIMESTAMP to a common place
+#include "mamba/solver/libsolv/parameters.hpp" // for PackageTypes
 
 #include "mambatests.hpp"
 
@@ -102,6 +108,8 @@ struct Mapping {
     auto cbegin_ids() const { return value_to_id.cbegin(); }
     auto cend_ids() const { return value_to_id.cend(); }
 
+    auto size() const { return id_to_value.size(); }
+
 
 private:
     std::unordered_map<T, ID> value_to_id;
@@ -128,8 +136,52 @@ struct PackageDatabase : public DependencyProvider {
     VersionSetId alloc_version_set(
         std::string_view raw_match_spec
     ) {
-        const MatchSpec match_spec = MatchSpec::parse(raw_match_spec).value();
+        std::string raw_match_spec_str = std::string(raw_match_spec);
+        // NOTE: works around `openblas 0.2.18|0.2.18.*.` from `dlib==19.0=np110py27_blas_openblas_200`
+        // If contains "|", split on it and recurse
+        if (raw_match_spec_str.find("|") != std::string::npos)
+        {
+            std::vector<std::string> match_specs;
+            std::string match_spec;
+            for (char c : raw_match_spec_str)
+            {
+                if (c == '|')
+                {
+                    match_specs.push_back(match_spec);
+                    match_spec.clear();
+                }
+                else
+                {
+                    match_spec += c;
+                }
+            }
+            match_specs.push_back(match_spec);
+            std::vector<VersionSetId> version_sets;
+            for (const std::string& match_spec : match_specs)
+            {
+                alloc_version_set(match_spec);
+            }
+            // Placeholder return value
+            return VersionSetId{0};
+        }
 
+        // NOTE: This works around some improperly encoded `constrains` in the test data, e.g.:
+        //      `openmpi-4.1.4-ha1ae619_102`'s improperly encoded `constrains`: "cudatoolkit  >= 10.2"
+        //      `pytorch-1.13.0-cpu_py310h02c325b_0.conda`'s improperly encoded `constrains`: "pytorch-cpu = 1.13.0", "pytorch-gpu = 99999999"
+        //      `fipy-3.4.2.1-py310hff52083_3.tar.bz2`'s improperly encoded `constrains` or `dep`: ">=4.5.2"
+        // Remove any with space after the binary operators
+        for(const std::string& op : {">=", "<=", "==", ">", "<", "!=", "=", "=="}) {
+            const std::string& bad_op = op + " ";
+            while (raw_match_spec_str.find(bad_op) != std::string::npos) {
+                raw_match_spec_str = raw_match_spec_str.substr(0, raw_match_spec_str.find(bad_op)) + op + raw_match_spec_str.substr(raw_match_spec_str.find(bad_op) + bad_op.size());
+            }
+            // If start with binary operator, prepend NONE
+            if (raw_match_spec_str.find(op) == 0) {
+                raw_match_spec_str = "NONE " + raw_match_spec_str;
+            }
+        }
+
+        const MatchSpec match_spec = MatchSpec::parse(raw_match_spec_str).value();
         // Add the version set to the version set pool
         auto id = version_set_pool.alloc(match_spec);
 
@@ -142,7 +194,6 @@ struct PackageDatabase : public DependencyProvider {
         const std::string match_spec_str = match_spec.str();
         name_pool.alloc(String{match_spec_str});
         string_pool.alloc(String{match_spec_str});
-
         return id;
     }
 
@@ -361,6 +412,242 @@ struct PackageDatabase : public DependencyProvider {
 
 };
 
+// TODO: reuse it from `mamba/solver/libsolv/helpers.cpp`
+auto lsplit_track_features(std::string_view features)
+{
+    constexpr auto is_sep = [](char c) -> bool { return (c == ',') || util::is_space(c); };
+    auto [_, tail] = util::lstrip_if_parts(features, is_sep);
+    return util::lstrip_if_parts(tail, [&](char c) { return !is_sep(c); });
+}
+
+bool parse_packageinfo_json(
+    const std::string_view& filename,
+    const simdjson::dom::element& pkg,
+    PackageDatabase& database
+    ) {
+    PackageInfo package_info;
+
+    package_info.filename = filename;
+    if (auto fn = pkg["fn"].get_string(); !fn.error())
+    {
+        package_info.name = fn.value_unsafe();
+    }
+    else
+    {
+        // Fallback from key entry
+        package_info.name = filename;
+    }
+
+    if (auto name = pkg["name"].get_string(); !name.error())
+    {
+        package_info.name = name.value_unsafe();
+    }
+    else
+    {
+        LOG_WARNING << R"(Found invalid name in ")" << filename << R"(")";
+        return false;
+    }
+
+    if (auto version = pkg["version"].get_string(); !version.error())
+    {
+        package_info.version = version.value_unsafe();
+    }
+    else
+    {
+        LOG_WARNING << R"(Found invalid version in ")" << filename << R"(")";
+        return false;
+    }
+
+    if (auto build_string = pkg["build"].get_string(); !build_string.error())
+    {
+        package_info.build_string = build_string.value_unsafe();
+    }
+    else
+    {
+        LOG_WARNING << R"(Found invalid build in ")" << filename << R"(")";
+        return false;
+    }
+
+    if (auto build_number = pkg["build_number"].get_uint64(); !build_number.error())
+    {
+        package_info.build_number = build_number.value_unsafe();
+    }
+    else
+    {
+        LOG_WARNING << R"(Found invalid build_number in ")" << filename << R"(")";
+        return false;
+    }
+
+    if (auto subdir = pkg["subdir"].get_c_str(); !subdir.error())
+    {
+        package_info.platform = subdir.value_unsafe();
+    }
+    else
+    {
+        LOG_WARNING << R"(Found invalid subdir in ")" << filename << R"(")";
+    }
+
+    if (auto size = pkg["size"].get_uint64(); !size.error())
+    {
+        package_info.size = size.value_unsafe();
+    }
+
+    if (auto md5 = pkg["md5"].get_c_str(); !md5.error())
+    {
+        package_info.md5 = md5.value_unsafe();
+    }
+
+    if (auto sha256 = pkg["sha256"].get_c_str(); !sha256.error())
+    {
+        package_info.sha256 = sha256.value_unsafe();
+    }
+
+    if (auto elem = pkg["noarch"]; !elem.error())
+    {
+        // TODO: is the following right?
+        if (auto val = elem.get_bool(); !val.error() && val.value_unsafe())
+        {
+            package_info.noarch = NoArchType::No;
+        }
+        else if (auto noarch = elem.get_c_str(); !noarch.error())
+        {
+            package_info.noarch = NoArchType::No;
+        }
+    }
+
+    if (auto license = pkg["license"].get_c_str(); !license.error())
+    {
+        package_info.license = license.value_unsafe();
+    }
+
+    // TODO conda timestamp are not Unix timestamp.
+    // Libsolv normalize them this way, we need to do the same here otherwise the current
+    // package may get arbitrary priority.
+    if (auto timestamp = pkg["timestamp"].get_uint64(); !timestamp.error())
+    {
+        const auto time = timestamp.value_unsafe();
+        // TODO: reuse it from `mamba/solver/libsolv/helpers.cpp`
+        constexpr auto MAX_CONDA_TIMESTAMP = 253402300799ULL;
+        package_info.timestamp = (time > MAX_CONDA_TIMESTAMP) ? (time / 1000) : time;
+    }
+
+    if (auto depends = pkg["depends"].get_array(); !depends.error())
+    {
+        for (auto elem : depends)
+        {
+            if (auto dep = elem.get_c_str(); !dep.error())
+            {
+                package_info.dependencies.emplace_back(dep.value_unsafe());
+            }
+        }
+    }
+
+    if (auto constrains = pkg["constrains"].get_array(); !constrains.error())
+    {
+        for (auto elem : constrains)
+        {
+            if (auto cons = elem.get_c_str(); !cons.error())
+            {
+                package_info.constrains.emplace_back(cons.value_unsafe());
+            }
+        }
+    }
+
+    if (auto obj = pkg["track_features"]; !obj.error())
+    {
+        if (auto track_features_arr = obj.get_array(); !track_features_arr.error())
+        {
+            for (auto elem : track_features_arr)
+            {
+                if (auto feat = elem.get_string(); !feat.error())
+                {
+                    package_info.track_features.emplace_back(feat.value_unsafe());
+                }
+            }
+        }
+        else if (auto track_features_str = obj.get_string(); !track_features_str.error())
+        {
+            auto splits = lsplit_track_features(track_features_str.value_unsafe());
+            while (!splits[0].empty())
+            {
+                package_info.track_features.emplace_back(splits[0]);
+                splits = lsplit_track_features(splits[1]);
+            }
+        }
+    }
+
+    database.alloc_solvable(package_info);
+    return true;
+}
+
+void parse_repodata_json(
+    PackageDatabase& database,
+    const fs::u8path& filename,
+    const std::string& repo_url,
+    const std::string& channel_id,
+    bool verify_artifacts
+)
+{
+    auto parser = simdjson::dom::parser();
+    const auto lock = LockFile(filename);
+    const auto repodata = parser.load(filename);
+
+    // An override for missing package subdir is found at the top level
+    auto default_subdir = std::string();
+    if (auto subdir = repodata.at_pointer("/info/subdir").get_string(); !subdir.error())
+    {
+        default_subdir = std::string(subdir.value_unsafe());
+    }
+
+    // Get `base_url` in case 'repodata_version': 2
+    // cf. https://github.com/conda-incubator/ceps/blob/main/cep-15.md
+    auto base_url = repo_url;
+    if (auto repodata_version = repodata["repodata_version"].get_int64();
+        !repodata_version.error())
+    {
+        if (repodata_version.value_unsafe() == 2)
+        {
+            if (auto url = repodata.at_pointer("/info/base_url").get_string(); !url.error())
+            {
+                base_url = std::string(url.value_unsafe());
+            }
+        }
+    }
+
+    const auto parsed_url = specs::CondaURL::parse(base_url)
+                                .or_else([](specs::ParseError&& err) { throw std::move(err); })
+                                .value();
+
+    auto signatures = std::optional<simdjson::dom::object>(std::nullopt);
+    if (auto maybe_sigs = repodata["signatures"].get_object();
+        !maybe_sigs.error() && verify_artifacts)
+    {
+        signatures = std::move(maybe_sigs).value();
+    }
+
+    std::cout << "Parsing repodata.json" << std::endl;
+    auto added = util::flat_set<std::string_view>();
+    if (auto pkgs = repodata["packages.conda"].get_object(); !pkgs.error())
+    {
+        std::cout << "CondaOrElseTarBz2 packages.conda" << std::endl;
+
+        for (auto [key, value] : pkgs.value())
+        {
+            parse_packageinfo_json(key, value, database);
+        }
+    }
+    if (auto pkgs = repodata["packages"].get_object(); !pkgs.error())
+    {
+        std::cout << "CondaOrElseTarBz2 packages" << std::endl;
+
+        for (auto [key, value] : pkgs.value())
+        {
+            parse_packageinfo_json(key, value, database);
+        }
+    }
+
+}
+
 TEST_SUITE("solver::resolvo")
 {
     using PackageInfo = PackageInfo;
@@ -519,91 +806,20 @@ TEST_SUITE("solver::resolvo")
         CHECK(database.solvable_pool[result[0]] == scikit_learn);
     }
 
-    TEST_CASE("Register repodata.json")
+    TEST_CASE("Parse repodata.json")
     {
         PackageDatabase database;
 
+        parse_repodata_json(
+            database,
+            "/tmp/repodata.json",
+            "https://conda.anaconda.org/conda-forge/linux-64/repodata.json",
+            "conda-forge",
+            false
+        );
 
-        /*
-         * {
-            "info": {"subdir":"linux-64"},
-            "packages": {
-                "21cmfast-3.0.2-py36h1af98f8_1.tar.bz2": {
-                    "build":"py36h1af98f8_1",
-                    "build_number":1,
-                    "constrains":[
-                        "llvm-meta ==8.0.0",
-                        "llvmdev ==8.0.0"
-                    ],
-                    "depends": [
-                        "_openmp_mutex >=4.5",
-                        "astropy >=2.0",
-                        "cached-property",
-                        "cffi >=1.0",
-                        "click",
-                        "fftw >=3.3.8,<4.0a0",
-                        "gsl >=2.6,<2.7.0a0",
-                        "h5py >=2.8.0",
-                        "libblas >=3.8.0,<4.0a0",
-                        "libgcc-ng >=7.5.0",
-                        "matplotlib-base",
-                        "numpy",
-                        "python >=3.6,<3.7.0a0",
-                        "python_abi 3.6.* *_cp36m",
-                        "pyyaml",
-                        "scipy"
-                    ],
-                    "license": "MIT",
-                    "license_family": "MIT",
-                    "md5": "d65ab674acf3b7294ebacaec05fc5b54",
-                    "name": "21cmfast",
-                    "sha256": "1154fceeb5c4ee9bb97d245713ac21eb1910237c724d2b7103747215663273c2",
-                    "size": 414494,
-                    "subdir": "linux-64",
-                    "timestamp": 1605110689658,
-                    "version": "3.0.2"
-                }
-            },
-            "removed": [],
-            "repodata_version": 1
-        }
-         */
-        // Create a PackageInfo from the above JSON
-        PackageInfo package_info;
-        package_info.name = "21cmfast";
-        package_info.version = "3.0.2";
-        package_info.build_string = "py36h1af98f8_1";
-        package_info.build_number = 1;
-        package_info.channel = "conda-forge/linux-64";
-        package_info.filename = "21cmfast-3.0.2-py36h1af98f8_1.tar.bz2";
-        package_info.license = "MIT";
-        package_info.md5 = "d65ab674acf3b7294ebacaec05fc5b54";
-        package_info.sha256 = "1154fceeb5c4ee9bb97d245713ac21eb1910237c724d2b7103747215663273c2";
-        package_info.size = 414494;
-        package_info.timestamp = 1605110689658;
-        package_info.package_type = PackageType::Conda;
+        std::cout << "Number of solvables: " << database.solvable_pool.size() << std::endl;
 
-        package_info.build_number = 1;
-        package_info.constrains = {"llvm-meta ==8.0.0", "llvmdev ==8.0.0"};
-        package_info.dependencies = {
-            "_openmp_mutex >=4.5",
-            "astropy >=2.0",
-            "cached-property",
-            "cffi >=1.0",
-            "click",
-            "fftw >=3.3.8,<4.0a0",
-            "gsl >=2.6,<2.7.0a0",
-            "h5py >=2.8.0",
-            "libblas >=3.8.0,<4.0a0",
-            "libgcc-ng >=7.5.0",
-            "matplotlib-base",
-            "numpy",
-            "python >=3.6,<3.7.0a0",
-            "python_abi 3.6.* *_cp36m",
-            "pyyaml",
-            "scipy"
-        };
     }
-
 
 }
