@@ -137,6 +137,36 @@ struct PackageDatabase : public DependencyProvider {
         std::string_view raw_match_spec
     ) {
         std::string raw_match_spec_str = std::string(raw_match_spec);
+        // Replace all " v" with simply " " to work around the `v` prefix in some version strings
+        // e.g. `mingw-w64-ucrt-x86_64-crt-git v12.0.0.r2.ggc561118da h707e725_0` in `infom2w64-sysroot_win-64-v12.0.0.r2.ggc561118da-h707e725_0.conda`
+        while (raw_match_spec_str.find(" v") != std::string::npos)
+        {
+            raw_match_spec_str = raw_match_spec_str.replace(raw_match_spec_str.find(" v"), 2, " ");
+        }
+
+        // Remove any presence of selector on python version in the match spec
+        // e.g. `pillow-heif >=0.10.0,<1.0.0<py312` -> `pillow-heif >=0.10.0,<1.0.0` in `infowillow-1.6.3-pyhd8ed1ab_0.conda`
+        for(const auto specifier: {"=py", "<py", ">py", ">=py", "<=py", "!=py"})
+        {
+            while (raw_match_spec_str.find(specifier) != std::string::npos)
+            {
+                raw_match_spec_str = raw_match_spec_str.substr(0, raw_match_spec_str.find(specifier));
+            }
+        }
+        // Remove any white space between version
+        // e.g. `kytea >=0.1.4, 0.2.0` -> `kytea >=0.1.4,0.2.0` in `infokonoha-4.6.3-pyhd8ed1ab_0.tar.bz2`
+        while (raw_match_spec_str.find(", ") != std::string::npos)
+        {
+            raw_match_spec_str = raw_match_spec_str.replace(raw_match_spec_str.find(", "), 2, ",");
+        }
+
+        // TODO: skip allocation for now if "*.*" is in the match spec
+        if (raw_match_spec_str.find("*.*") != std::string::npos)
+        {
+            return VersionSetId{0};
+        }
+
+
         // NOTE: works around `openblas 0.2.18|0.2.18.*.` from `dlib==19.0=np110py27_blas_openblas_200`
         // If contains "|", split on it and recurse
         if (raw_match_spec_str.find("|") != std::string::npos)
@@ -253,7 +283,7 @@ struct PackageDatabase : public DependencyProvider {
         std::string result;
         for (auto& solvable_id : solvable) {
             // Append "solvable_id" and its name to the result
-            std::cout << "Displaying solvable " << solvable_id.id << " " << solvable_pool[solvable_id].long_str() << std::endl;
+            // std::cout << "Displaying solvable " << solvable_id.id << " " << solvable_pool[solvable_id].long_str() << std::endl;
             result += std::to_string(solvable_id.id) + " " + solvable_pool[solvable_id].long_str();
         }
         return String{result};
@@ -292,7 +322,7 @@ struct PackageDatabase : public DependencyProvider {
      */
     NameId version_set_name(VersionSetId version_set_id) override {
         const MatchSpec match_spec = version_set_pool[version_set_id];
-        std::cout << "Getting name id for version_set_id " << match_spec.name().str() << std::endl;
+        // std::cout << "Getting name id for version_set_id " << match_spec.name().str() << std::endl;
         return name_pool[String{match_spec.name().str()}];
     }
 
@@ -301,7 +331,7 @@ struct PackageDatabase : public DependencyProvider {
      */
     NameId solvable_name(SolvableId solvable_id) override {
         const PackageInfo& package_info = solvable_pool[solvable_id];
-        std::cout << "Getting name id for solvable " << package_info.long_str() << std::endl;
+        // std::cout << "Getting name id for solvable " << package_info.long_str() << std::endl;
         return name_pool[String{package_info.name}];
     }
 
@@ -310,15 +340,15 @@ struct PackageDatabase : public DependencyProvider {
      * with the given name is requested.
      */
     Candidates get_candidates(NameId package) override {
-        std::cout << "Getting candidates for " << name_pool[package] << std::endl;
+        // std::cout << "Getting candidates for " << name_pool[package] << std::endl;
         Candidates candidates;
         candidates.favored = nullptr;
         candidates.locked = nullptr;
         // TODO: inefficient for now, O(n) which can be turned into O(1)
         for (auto& [solvable_id, package_info] : solvable_pool) {
-            std::cout << "  Checking " << package_info.long_str() << std::endl;
+            // std::cout << "  Checking " << package_info.long_str() << std::endl;
             if (package == solvable_name(solvable_id)) {
-                std::cout << "  Adding candidate " << package_info.long_str() << std::endl;
+                // std::cout << "  Adding candidate " << package_info.long_str() << std::endl;
                 candidates.candidates.push_back(solvable_id);
             }
         }
@@ -332,7 +362,7 @@ struct PackageDatabase : public DependencyProvider {
      * tried. This continues until a solution is found.
      */
     void sort_candidates(Slice<SolvableId> solvables) override {
-        std::cout << "Sorting candidates" << std::endl;
+        // std::cout << "Sorting candidates" << std::endl;
         std::sort(solvables.begin(), solvables.end(), [&](const SolvableId& a, const SolvableId& b) {
             const PackageInfo& package_info_a = solvable_pool[a];
             const PackageInfo& package_info_b = solvable_pool[b];
@@ -341,11 +371,11 @@ struct PackageDatabase : public DependencyProvider {
             const auto b_version = Version::parse(package_info_b.version).value();
 
             if (a_version != b_version) {
-                return a_version < b_version;
+                return a_version > b_version;
             }
             // TODO: add sorting on track features and other things
 
-            return package_info_a.build_number < package_info_b.build_number;
+            return package_info_a.build_number > package_info_b.build_number;
         });
     }
 
@@ -395,7 +425,7 @@ struct PackageDatabase : public DependencyProvider {
      */
     Dependencies get_dependencies(SolvableId solvable_id) override {
         const PackageInfo& package_info = solvable_pool[solvable_id];
-        std::cout << "Getting dependencies for " << package_info.long_str() << std::endl;
+        // std::cout << "Getting dependencies for " << package_info.long_str() << std::endl;
         Dependencies dependencies;
 
         for (auto& dep : package_info.dependencies) {
@@ -625,7 +655,6 @@ void parse_repodata_json(
         signatures = std::move(maybe_sigs).value();
     }
 
-    std::cout << "Parsing repodata.json" << std::endl;
     auto added = util::flat_set<std::string_view>();
     if (auto pkgs = repodata["packages.conda"].get_object(); !pkgs.error())
     {
@@ -806,19 +835,138 @@ TEST_SUITE("solver::resolvo")
         CHECK(database.solvable_pool[result[0]] == scikit_learn);
     }
 
-    TEST_CASE("Parse repodata.json")
+    TEST_CASE("Parse linux-64/repodata.json")
     {
         PackageDatabase database;
 
         parse_repodata_json(
             database,
-            "/tmp/repodata.json",
+            "/tmp/linux-64/repodata.json",
             "https://conda.anaconda.org/conda-forge/linux-64/repodata.json",
             "conda-forge",
             false
         );
 
         std::cout << "Number of solvables: " << database.solvable_pool.size() << std::endl;
+
+    }
+
+    TEST_CASE("Parse noarch/repodata.json")
+    {
+        PackageDatabase database;
+
+        parse_repodata_json(
+            database,
+            "/tmp/noarch/repodata.json",
+            "https://conda.anaconda.org/conda-forge/noarch/repodata.json",
+            "conda-forge",
+            false
+        );
+
+        std::cout << "Number of solvables: " << database.solvable_pool.size() << std::endl;
+
+    }
+
+    TEST_CASE("Known problem resolution") {
+        PackageDatabase database;
+
+        parse_repodata_json(
+            database,
+            "/tmp/linux-64/repodata.json",
+            "https://conda.anaconda.org/conda-forge/linux-64/repodata.json",
+            "conda-forge",
+            false
+        );
+
+
+        parse_repodata_json(
+            database,
+            "/tmp/noarch/repodata.json",
+            "https://conda.anaconda.org/conda-forge/noarch/repodata.json",
+            "conda-forge",
+            false
+        );
+
+        std::cout << "Solving problem" << std::endl;
+
+        resolvo::Vector<resolvo::VersionSetId> requirements = {
+            database.alloc_version_set("python[version=\">=3.10,<3.11.0a0\"]"),
+            database.alloc_version_set("pip"),
+            database.alloc_version_set("scikit-learn[version=\">=1.0.0,<1.6a0\"]"),
+            database.alloc_version_set("numpy[version=\">=1.20.0,<2.0a0\"]"),
+            database.alloc_version_set("scipy[version=\">=1.10.0,<1.15a0\"]"),
+            database.alloc_version_set("joblib[version=\">=1.0.1,<2.0a0\"]"),
+            database.alloc_version_set("threadpoolctl[version=\">=2.1.0,<3.6a0\"]"),
+        };
+        resolvo::Vector<resolvo::VersionSetId> constraints = {};
+
+        resolvo::Vector<resolvo::SolvableId> result;
+
+        String reason = resolvo::solve(database, requirements, constraints, result);
+
+        CHECK(reason == "");
+
+        CHECK(result.size() == 36);
+        // Sort all the `Solvables` in `result` on their name
+        std::sort(result.begin(), result.end(), [&](const SolvableId& a, const SolvableId& b) {
+            const PackageInfo& package_info_a = database.solvable_pool[a];
+            const PackageInfo& package_info_b = database.solvable_pool[b];
+            return package_info_a.name < package_info_b.name;
+        });
+
+        std::vector<PackageInfo> known_resolution = {
+            PackageInfo("_libgcc_mutex", "0.1", "conda_forge", 0),
+            PackageInfo("python_abi", "3.10", "4_cp310", 0),
+            PackageInfo("ld_impl_linux-64", "2.40", "hf3520f5_7", 0),
+            PackageInfo("ca-certificates", "2024.6.2", "hbcca054_0", 0),
+            PackageInfo("libgomp", "14.1.0", "h77fa898_0", 0),
+            PackageInfo("_openmp_mutex", "4.5", "2_gnu", 0),
+            PackageInfo("libgcc-ng", "14.1.0", "h77fa898_0", 0),
+            PackageInfo("openssl", "3.3.1", "h4ab18f5_1", 0),
+            PackageInfo("libxcrypt", "4.4.36", "hd590300_1", 0),
+            PackageInfo("libzlib", "1.3.1", "h4ab18f5_1", 0),
+            PackageInfo("libffi", "3.4.2", "h7f98852_5", 0),
+            PackageInfo("bzip2", "1.0.8", "hd590300_5", 0),
+            PackageInfo("ncurses", "6.5", "h59595ed_0", 0),
+            PackageInfo("libstdcxx-ng", "14.1.0", "hc0a3c3a_0", 0),
+            PackageInfo("libgfortran5", "14.1.0", "hc5f4f2c_0", 0),
+            PackageInfo("libuuid", "2.38.1", "h0b41bf4_0", 0),
+            PackageInfo("libnsl", "2.0.1", "hd590300_0", 0),
+            PackageInfo("xz", "5.2.6", "h166bdaf_0", 0),
+            PackageInfo("tk", "8.6.13", "noxft_h4845f30_101", 0),
+            PackageInfo("libsqlite", "3.46.0", "hde9e2c9_0", 0),
+            PackageInfo("readline", "8.2", "h8228510_1", 0),
+            PackageInfo("libgfortran-ng", "14.1.0", "h69a702a_0", 0),
+            PackageInfo("libopenblas", "0.3.27", "pthreads_h413a1c8_0", 0),
+            PackageInfo("libblas", "3.9.0", "22_linux64_openblas", 0),
+            PackageInfo("libcblas", "3.9.0", "22_linux64_openblas", 0),
+            PackageInfo("liblapack", "3.9.0", "22_linux64_openblas", 0),
+            PackageInfo("tzdata", "2024a", "h0c530f3_0", 0),
+            PackageInfo("python", "3.10.14", "hd12c33a_0_cpython", 0),
+            PackageInfo("wheel", "0.43.0", "pyhd8ed1ab_1", 0),
+            PackageInfo("setuptools", "70.1.1", "pyhd8ed1ab_0", 0),
+            PackageInfo("pip", "24.0", "pyhd8ed1ab_0", 0),
+            PackageInfo("threadpoolctl", "3.5.0", "pyhc1e730c_0", 0),
+            PackageInfo("joblib", "1.4.2", "pyhd8ed1ab_0", 0),
+            PackageInfo("numpy", "1.26.4", "py310hb13e2d6_0", 0),
+            PackageInfo("scipy", "1.14.0", "py310h93e2701_0", 0),
+            PackageInfo("scikit-learn", "1.5.0", "py310h981052a_1", 1)
+        };
+
+        // Sort know_resolution on their name
+        std::sort(known_resolution.begin(), known_resolution.end(), [&](const PackageInfo& a, const PackageInfo& b) {
+            return a.name < b.name;
+        });
+
+        // Check solvables against know_resolution
+        for (size_t i = 0; i < result.size(); i++) {
+            const PackageInfo& package_info = database.solvable_pool[result[i]];
+            const PackageInfo& known_package_info = known_resolution[i];
+            // TODO: also check all the other fields
+            CHECK(package_info.name == known_package_info.name);
+            CHECK(package_info.version == known_package_info.version);
+            CHECK(package_info.build_string == known_package_info.build_string);
+        }
 
     }
 
