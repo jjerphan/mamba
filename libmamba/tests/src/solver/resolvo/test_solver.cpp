@@ -350,15 +350,10 @@ struct PackageDatabase : public DependencyProvider {
      * with the given name is requested.
      */
     Candidates get_candidates(NameId package) override {
-        std::cout << "DO Getting candidates for " << name_pool[package] << std::endl;
         Candidates candidates{};
         candidates.favored = nullptr;
         candidates.locked = nullptr;
-        std::cout << "DO   Assigning candidates for " << name_pool[package] << std::endl;
         candidates.candidates = name_to_solvable[package];
-        std::cout << "DONE Assigning candidates for " << name_pool[package] << std::endl;
-
-        std::cout << "DONE Getting candidates for " << name_pool[package] << std::endl;
         return candidates;
     }
 
@@ -372,16 +367,24 @@ struct PackageDatabase : public DependencyProvider {
         std::sort(solvables.begin(), solvables.end(), [&](const SolvableId& a, const SolvableId& b) {
             const PackageInfo& package_info_a = solvable_pool[a];
             const PackageInfo& package_info_b = solvable_pool[b];
-            // TODO: Add some caching on the version parsing
+
+            // If track features are present, prefer the solvable having the least of them.
+            if (package_info_a.track_features.size() != package_info_b.track_features.size()) {
+                return package_info_a.track_features.size() < package_info_b.track_features.size() ;
+            }
+
             const auto a_version = Version::parse(package_info_a.version).value();
             const auto b_version = Version::parse(package_info_b.version).value();
 
             if (a_version != b_version) {
                 return a_version > b_version;
             }
-            // TODO: add sorting on track features and other things
 
-            return package_info_a.build_number > package_info_b.build_number;
+            if (package_info_a.build_number != package_info_b.build_number) {
+                return package_info_a.build_number > package_info_b.build_number;
+            }
+
+            return package_info_a.timestamp > package_info_b.timestamp;
         });
     }
 
@@ -421,11 +424,11 @@ struct PackageDatabase : public DependencyProvider {
                 }
             }
         }
-        std::cout << "Keeping " << filtered.size() << " candidates for " << match_spec.str() << ":" << std::endl;
+        // std::cout << "Keeping " << filtered.size() << " candidates for " << match_spec.str() << ":" << std::endl;
         for (auto& solvable_id : filtered)
         {
             const PackageInfo& package_info = solvable_pool[solvable_id];
-            std::cout << "  - " << package_info.long_str() << std::endl;
+            // std::cout << "  - " << package_info.long_str() << std::endl;
         }
 
         return filtered;
@@ -435,7 +438,7 @@ struct PackageDatabase : public DependencyProvider {
      * Returns the dependencies for the specified solvable.
      */
     Dependencies get_dependencies(SolvableId solvable_id) override {
-        std::cout << "Getting dependencies for " << solvable_id.id << std::endl;
+        // std::cout << "Getting dependencies for " << solvable_id.id << std::endl;
         const PackageInfo& package_info = solvable_pool[solvable_id];
 
         Dependencies dependencies;
@@ -703,24 +706,42 @@ auto extract_package_to_install(const Solution& solution) -> std::vector<specs::
 
 // wget https://conda.anaconda.org/conda-forge/linux-64/repodata.json
 // wget https://conda.anaconda.org/conda-forge/noarch/repodata.json
-auto libsolv_db = mamba::solver::libsolv::Database({
-    /* .platforms= */ { "linux-64", "noarch" },
-    /* .channel_alias= */ specs::CondaURL::parse("https://conda.anaconda.org/").value(),
-});
 
-//const auto repo_linux = libsolv_db.add_repo_from_repodata_json(
-//    "/tmp/linux-64/repodata.json",
-//    "https://conda.anaconda.org/conda-forge/linux-64",
-//    "conda-forge",
-//    libsolv::PipAsPythonDependency::No
-//);
-//
-//const auto repo_noarch = libsolv_db.add_repo_from_repodata_json(
-//    "/tmp/noarch/repodata.json",
-//    "https://conda.anaconda.org/conda-forge/noarch",
-//    "conda-forge",
-//    libsolv::PipAsPythonDependency::Yes
-//);
+mamba::solver::libsolv::Database create_libsolv_db() {
+    auto libsolv_db = mamba::solver::libsolv::Database({
+        /* .platforms= */ { "linux-64", "noarch" },
+        /* .channel_alias= */ specs::CondaURL::parse("https://conda.anaconda.org/").value(),
+    });
+
+
+    const auto repo_linux = libsolv_db.add_repo_from_repodata_json(
+        "/tmp/linux-64/repodata.json",
+        "https://conda.anaconda.org/conda-forge/linux-64",
+        "conda-forge",
+        libsolv::PipAsPythonDependency::No
+    );
+
+    const auto repo_noarch = libsolv_db.add_repo_from_repodata_json(
+        "/tmp/noarch/repodata.json",
+        "https://conda.anaconda.org/conda-forge/noarch",
+        "conda-forge",
+        libsolv::PipAsPythonDependency::Yes
+    );
+
+    // Not adding Pip dependency since it might needlessly make the installed/active environment
+    // broken if pip is not already installed (debatable).
+    // TODO: change the signature of `get_virtual_packages` to take a `Context` object instead
+    Context context;
+    context.platform = "linux-64";
+    auto repo = libsolv_db.add_repo_from_packages(
+        get_virtual_packages(context),
+        "virtual",
+        solver::libsolv::PipAsPythonDependency::No
+    );
+    libsolv_db.set_installed_repo(repo);
+
+    return libsolv_db;
+};
 
 PackageDatabase create_resolvo_db() {
     PackageDatabase resolvo_db;
@@ -753,48 +774,9 @@ PackageDatabase create_resolvo_db() {
     return resolvo_db;
 }
 
-
+mamba::solver::libsolv::Database libsolv_db = create_libsolv_db();
 PackageDatabase resolvo_db = create_resolvo_db();
 
-std::vector<PackageInfo> resolvo_resolve(
-    PackageDatabase& database,
-    const std::vector<std::string>& specs
-) {
-    // resolvo's specification and resolution
-    resolvo::Vector<resolvo::VersionSetId> requirements;
-    for (const auto& spec : specs)
-    {
-        requirements.push_back(resolvo_db.alloc_version_set(spec));
-    }
-
-    resolvo::Vector<resolvo::VersionSetId> constraints = {};
-    resolvo::Vector<resolvo::SolvableId> result;
-
-    std::cout << "Start with resolvo" << std::endl;
-    auto tick_resolvo = std::chrono::steady_clock::now();
-    String reason = resolvo::solve(resolvo_db, requirements, constraints, result);
-    auto tack_resolvo = std::chrono::steady_clock::now();
-    std::cout << "End with resolvo" << std::endl;
-    std::cout << "Elapsed time: " << std::chrono::duration_cast<std::chrono::milliseconds>(tack_resolvo - tick_resolvo).count() << "ms" << std::endl;
-
-    CHECK_EQ(reason, "");
-
-    std::vector<PackageInfo> resolvo_resolution;
-    std::transform(
-        result.begin(),
-        result.end(),
-        std::back_inserter(resolvo_resolution),
-        [&](const resolvo::SolvableId& solvable_id)
-        { return resolvo_db.solvable_pool[solvable_id]; }
-    );
-
-    std::sort(
-        resolvo_resolution.begin(),
-        resolvo_resolution.end(),
-        [&](const PackageInfo& a, const PackageInfo& b) { return a.name < b.name; }
-    );
-    return resolvo_resolution;
-}
 
 std::vector<PackageInfo> libsolv_resolve(
     mamba::solver::libsolv::Database& db,
@@ -825,16 +807,63 @@ std::vector<PackageInfo> libsolv_resolve(
     std::cout << "Elapsed time: " << std::chrono::duration_cast<std::chrono::milliseconds>(tack_libsolv - tick_libsolv).count() << "ms" << std::endl;
 
     REQUIRE(outcome.has_value());
-    REQUIRE(std::holds_alternative<Solution>(outcome.value()));
-    const auto& solution = std::get<Solution>(outcome.value());
+    if (std::holds_alternative<Solution>(outcome.value()))
+    {
+        const auto& solution = std::get<Solution>(outcome.value());
 
-    std::vector<PackageInfo> libsolv_resolution = extract_package_to_install(solution);
-    std::sort(
-        libsolv_resolution.begin(),
-        libsolv_resolution.end(),
-        [&](const PackageInfo& a, const PackageInfo& b) { return a.name < b.name; }
-    );
-    return libsolv_resolution;
+        std::vector<PackageInfo> libsolv_resolution = extract_package_to_install(solution);
+        std::sort(
+            libsolv_resolution.begin(),
+            libsolv_resolution.end(),
+            [&](const PackageInfo& a, const PackageInfo& b) { return a.name < b.name; }
+        );
+        return libsolv_resolution;
+    }
+    return {};
+}
+
+
+std::vector<PackageInfo> resolvo_resolve(
+    PackageDatabase& database,
+    const std::vector<std::string>& specs
+) {
+    // resolvo's specification and resolution
+    resolvo::Vector<resolvo::VersionSetId> requirements;
+    for (const auto& spec : specs)
+    {
+        requirements.push_back(resolvo_db.alloc_version_set(spec));
+    }
+
+    resolvo::Vector<resolvo::VersionSetId> constraints = {};
+    resolvo::Vector<resolvo::SolvableId> result;
+
+    std::cout << "Start with resolvo" << std::endl;
+    auto tick_resolvo = std::chrono::steady_clock::now();
+    String reason = resolvo::solve(resolvo_db, requirements, constraints, result);
+    auto tack_resolvo = std::chrono::steady_clock::now();
+    std::cout << "End with resolvo" << std::endl;
+    std::cout << "Elapsed time: " << std::chrono::duration_cast<std::chrono::milliseconds>(tack_resolvo - tick_resolvo).count() << "ms" << std::endl;
+
+    if (reason == "")
+    {
+        std::vector<PackageInfo> resolvo_resolution;
+        for(auto solvable_id : result)
+        {
+            PackageInfo package_info = resolvo_db.solvable_pool[solvable_id];
+            // Skip virtual package (i.e. whose `package_info.name` starts with "__")
+            if (package_info.name.find("__") != 0) {
+                resolvo_resolution.push_back(package_info);
+            }
+        }
+
+        std::sort(
+            resolvo_resolution.begin(),
+            resolvo_resolution.end(),
+            [&](const PackageInfo& a, const PackageInfo& b) { return a.name < b.name; }
+        );
+        return resolvo_resolution;
+    }
+    return {};
 }
 
 
@@ -989,7 +1018,7 @@ TEST_SUITE("solver::resolvo")
         CHECK(build_ter.size() == 0);
     }
 
-    TEST_CASE("Sort solvables increasing order")
+    TEST_CASE("Sort solvables")
     {
         PackageDatabase database;
 
@@ -1005,18 +1034,63 @@ TEST_SUITE("solver::resolvo")
         PackageInfo skl3("scikit-learn", "1.5.0", "py310h981052a_2", 2);
         auto sol3 = database.alloc_solvable(skl3);
 
-        PackageInfo scikit_learn_ter("scikit-learn", "1.5.1", "py310h981052a_1", 1);
-        auto sol4 = database.alloc_solvable(skl3);
+        PackageInfo skl4("scikit-learn", "1.5.1", "py310h981052a_1", 1);
+        auto sol4 = database.alloc_solvable(skl4);
 
         Vector<SolvableId> solvables = { sol0, sol1, sol2, sol3, sol4 };
 
         database.sort_candidates(solvables);
 
-        CHECK(solvables[0] == sol1);
-        CHECK(solvables[1] == sol3);
-        CHECK(solvables[2] == sol4);
-        CHECK(solvables[3] == sol2);
-        CHECK(solvables[4] == sol0);
+        CHECK_EQ(solvables[0], sol0);
+        CHECK_EQ(solvables[1], sol2);
+        CHECK_EQ(solvables[2], sol4);
+        CHECK_EQ(solvables[3], sol3);
+        CHECK_EQ(solvables[4], sol1);
+    }
+
+    TEST_CASE("Sort solvables (build number only)")
+    {
+        PackageDatabase database;
+
+        PackageInfo skl0("scikit-learn", "1.5.0", "py310h981052a_0", 0);
+        auto sol0 = database.alloc_solvable(skl0);
+
+        PackageInfo skl1("scikit-learn", "1.5.0", "py310h981052a_3", 3);
+        auto sol1 = database.alloc_solvable(skl1);
+
+        PackageInfo skl2("scikit-learn", "1.5.0", "py310h981052a_2", 2);
+        auto sol2 = database.alloc_solvable(skl2);
+
+        PackageInfo skl3("scikit-learn", "1.5.0", "py310h981052a_1", 1);
+        auto sol3 = database.alloc_solvable(skl3);
+
+        PackageInfo skl4("scikit-learn", "1.5.0", "py310h981052a_4", 4);
+        auto sol4 = database.alloc_solvable(skl4);
+
+        PackageInfo skl5("scikit-learn", "1.5.0", "py310h981052a_5", 5);
+        skl5.timestamp = 1337;
+        auto sol5 = database.alloc_solvable(skl5);
+
+        PackageInfo skl6("scikit-learn", "1.5.0", "py310h981052a_5", 5);
+        skl6.timestamp = 42;
+        auto sol6 = database.alloc_solvable(skl6);
+
+        PackageInfo skl7("scikit-learn", "1.5.0", "py310h981052a_5", 5);
+        skl7.timestamp = 2000;
+        auto sol7 = database.alloc_solvable(skl7);
+
+        Vector<SolvableId> solvables = { sol0, sol1, sol2, sol3, sol4, sol5, sol6, sol7 };
+
+        database.sort_candidates(solvables);
+
+        CHECK_EQ(solvables[0], sol7);
+        CHECK_EQ(solvables[1], sol5);
+        CHECK_EQ(solvables[2], sol6);
+        CHECK_EQ(solvables[3], sol4);
+        CHECK_EQ(solvables[4], sol1);
+        CHECK_EQ(solvables[5], sol2);
+        CHECK_EQ(solvables[6], sol3);
+        CHECK_EQ(solvables[7], sol0);
     }
 
     TEST_CASE("Trivial problem")
@@ -1074,7 +1148,7 @@ TEST_SUITE("solver::resolvo")
     {
         std::vector<std::string> specs_to_install = {
             "python[version=\">=3.10,<3.11.0a0\"]",      "pip",
-            "scikit-learn[version=\">=1.0.0,<1.6a0\"]",  "numpy[version=\">=1.20.0,<2.0a0\"]",
+            "scikit-learn[version=\">=1.0.0,<1.5.1\"]",  "numpy[version=\">=1.20.0,<2.0a0\"]",
             "scipy[version=\">=1.10.0,<1.15a0\"]",       "joblib[version=\">=1.0.1,<2.0a0\"]",
             "threadpoolctl[version=\">=2.1.0,<3.6a0\"]",
         };
@@ -1083,7 +1157,7 @@ TEST_SUITE("solver::resolvo")
             PackageInfo("_libgcc_mutex", "0.1", "conda_forge", 0),
             PackageInfo("python_abi", "3.10", "4_cp310", 0),
             PackageInfo("ld_impl_linux-64", "2.40", "hf3520f5_7", 0),
-            PackageInfo("ca-certificates", "2024.6.2", "hbcca054_0", 0),
+            PackageInfo("ca-certificates", "2024.7.4", "hbcca054_0", 0),
             PackageInfo("libgomp", "14.1.0", "h77fa898_0", 0),
             PackageInfo("_openmp_mutex", "4.5", "2_gnu", 0),
             PackageInfo("libgcc-ng", "14.1.0", "h77fa898_0", 0),
@@ -1102,7 +1176,7 @@ TEST_SUITE("solver::resolvo")
             PackageInfo("libsqlite", "3.46.0", "hde9e2c9_0", 0),
             PackageInfo("readline", "8.2", "h8228510_1", 0),
             PackageInfo("libgfortran-ng", "14.1.0", "h69a702a_0", 0),
-            PackageInfo("libopenblas", "0.3.27", "pthreads_h413a1c8_0", 0),
+            PackageInfo("libopenblas", "0.3.27", "pthreads_hac2b453_1", 0),
             PackageInfo("libblas", "3.9.0", "22_linux64_openblas", 0),
             PackageInfo("libcblas", "3.9.0", "22_linux64_openblas", 0),
             PackageInfo("liblapack", "3.9.0", "22_linux64_openblas", 0),
@@ -1114,7 +1188,7 @@ TEST_SUITE("solver::resolvo")
             PackageInfo("threadpoolctl", "3.5.0", "pyhc1e730c_0", 0),
             PackageInfo("joblib", "1.4.2", "pyhd8ed1ab_0", 0),
             PackageInfo("numpy", "1.26.4", "py310hb13e2d6_0", 0),
-            PackageInfo("scipy", "1.14.0", "py310h93e2701_0", 0),
+            PackageInfo("scipy", "1.14.0", "py310h93e2701_1", 0),
             PackageInfo("scikit-learn", "1.5.0", "py310h981052a_1", 1)
         };
 
@@ -1148,12 +1222,111 @@ TEST_SUITE("solver::resolvo")
         }
     }
 
-    TEST_CASE("mlflow=2.12.2 explicit") {
-        // See: https://github.com/mamba-org/rattler/issues/684
-        std::vector<std::string> specs_to_install = { "mlflow=2.12.2" };
+    TEST_CASE("mamba-org/rattler/issues/684")
+    {
+        for (const std::vector<std::string>& specs_to_install : std::initializer_list<std::vector<std::string>> {
+            {"mlflow=2.12.2"},
+            {"orange3=3.36.2"},
+            {"ray-dashboard=2.6.3"},
+            {"ray-default=2.6.3"},
+            {"spark-nlp=5.1.2"},
+            {"spyder=5.5.1"},
+            {"streamlit-faker=0.0.2"}
+        })
+        {
+            SUBCASE("")
+            {
+                // See: https://github.com/mamba-org/rattler/issues/684
+                std::vector<PackageInfo> libsolv_resolution = libsolv_resolve(
+                    libsolv_db,
+                    specs_to_install
+                );
 
-        std::vector<PackageInfo> libsolv_resolution = libsolv_resolve(libsolv_db, specs_to_install);
-        std::vector<PackageInfo> resolvo_resolution = resolvo_resolve(resolvo_db, specs_to_install);
+                // Print all the packages from libsolv
+                std::cout << "libsolv resolution:" << std::endl;
+                for (const auto& package_info : libsolv_resolution)
+                {
+                    std::cout << " - " << package_info.long_str() << std::endl;
+                }
+
+                std::cout << std::endl;
+                std::vector<PackageInfo> resolvo_resolution = resolvo_resolve(
+                    resolvo_db,
+                    specs_to_install
+                );
+
+                // Print all the packages from resolvo
+                std::cout << "resolvo resolution:" << std::endl;
+                for (const auto& package_info : resolvo_resolution)
+                {
+                    std::cout << " - " << package_info.long_str() << std::endl;
+                }
+
+                CHECK_GT(resolvo_resolution.size(), 0);
+                CHECK_GT(libsolv_resolution.size(), 0);
+                // Check libsolv's PackageInfo against libsolv's
+                CHECK_EQ(resolvo_resolution.size(), libsolv_resolution.size());
+                for (size_t i = 0; i < std::min(resolvo_resolution.size(), libsolv_resolution.size()); i++)
+                {
+                    const PackageInfo& resolvo_package_info = resolvo_resolution[i];
+                    const PackageInfo& libsolv_package_info = libsolv_resolution[i];
+                    // Currently something in the parsing of the repodata.json must be different.
+                    // TODO: find the difference and use `PackageInfo::operator==` instead
+                    CHECK_EQ(resolvo_package_info.name, libsolv_package_info.name);
+                    // CHECK_EQ(resolvo_package_info.version, libsolv_package_info.version);
+                    // CHECK_EQ(resolvo_package_info.build_string, libsolv_package_info.build_string);
+                }
+            }
+        }
+    }
+
+
+    TEST_CASE("Consistency with libsolv: Celery & Dash")
+    {
+        std::vector<std::string> specs_to_install = {
+            // TODO: when python >=3.12 is unpinned, environment aren't identical
+            "python",
+            "celery",
+            "dash",
+            "dash-core-components",
+            "dash-html-components",
+            "dash-table"
+        };
+
+        // Print all the dependencies
+        std::cout << "Specification to install:" << std::endl;
+        for (const auto& dep : specs_to_install)
+        {
+            std::cout << " - " << dep << std::endl;
+        }
+
+        std::vector<PackageInfo> libsolv_resolution = libsolv_resolve(
+            libsolv_db,
+            specs_to_install
+        );
+
+        // Print all the packages from libsolv
+        std::cout << "libsolv resolution:" << std::endl;
+        for (const auto& package_info : libsolv_resolution)
+        {
+            std::cout << " - " << package_info.long_str() << std::endl;
+        }
+
+        std::cout << std::endl;
+
+        std::vector<PackageInfo> resolvo_resolution = resolvo_resolve(
+            resolvo_db,
+            specs_to_install
+        );
+
+        // Print all the packages from resolvo
+        std::cout << "resolvo resolution:" << std::endl;
+        for (const auto& package_info : resolvo_resolution)
+        {
+            std::cout << " - " << package_info.long_str() << std::endl;
+        }
+
+        std::cout << std::endl;
 
         // Check libsolv's PackageInfo against libsolv's
         CHECK_EQ(resolvo_resolution.size(), libsolv_resolution.size());
@@ -1166,81 +1339,6 @@ TEST_SUITE("solver::resolvo")
             CHECK_EQ(resolvo_package_info.name, libsolv_package_info.name);
             CHECK_EQ(resolvo_package_info.version, libsolv_package_info.version);
             CHECK_EQ(resolvo_package_info.build_string, libsolv_package_info.build_string);
-        }
-
-    }
-
-
-    TEST_CASE("Consistency with libsolv: env' creation from YAML specification")
-    {
-        for (const fs::u8path& yaml_file : {
-            "/tmp/unconstrained_tiny_spec3.yaml",
-//            "/tmp/unconstrained_tiny_spec2.yaml",
-//             "/tmp/unconstrained_small_spec2.yaml",
-//             "/tmp/small_spec2.yaml",
-//             "/tmp/small_spec.yaml"
-//              "/tmp/spec.yaml"
-        })
-        {
-            SUBCASE("")
-            {
-                std::cout << "Resolving " << yaml_file << std::endl;
-                mamba::detail::yaml_file_contents res = mamba::detail::read_yaml_file(
-                    yaml_file,
-                    "linux-64"
-                );
-
-                std::vector<std::string> specs_to_install = res.dependencies;
-
-                // Print all the dependencies
-                std::cout << "dependencies" << std::endl;
-                for (const auto& dep : specs_to_install)
-                {
-                    std::cout << " - " << dep << std::endl;
-                }
-
-                // Add python to the specs to install
-                // TODO: environments aren't resolved similarly when "python" simply is used.
-                // specs_to_install.push_back("python>=3.12");
-
-//                std::vector<PackageInfo> libsolv_resolution = libsolv_resolve(
-//                    libsolv_db,
-//                    specs_to_install
-//                );
-                std::vector<PackageInfo> resolvo_resolution = resolvo_resolve(
-                    resolvo_db,
-                    specs_to_install
-                );
-
-//                // Print all the packages from libsolv
-//                std::cout << "libsolv resolution" << std::endl;
-//                for (const auto& package_info : libsolv_resolution)
-//                {
-//                    std::cout << " - " << package_info.long_str() << std::endl;
-//                }
-
-                std::cout << std::endl;
-
-                // Print all the packages from resolvo
-                std::cout << "resolvo resolution" << std::endl;
-                for (const auto& package_info : resolvo_resolution)
-                {
-                    std::cout << " - " << package_info.long_str() << std::endl;
-                }
-
-//                // Check libsolv's PackageInfo against libsolv's
-//                CHECK_EQ(resolvo_resolution.size(), libsolv_resolution.size());
-//                for (size_t i = 0; i < libsolv_resolution.size(); i++)
-//                {
-//                    const PackageInfo& resolvo_package_info = resolvo_resolution[i];
-//                    const PackageInfo& libsolv_package_info = libsolv_resolution[i];
-//                    // Currently something in the parsing of the repodata.json must be different.
-//                    // TODO: find the difference and use `PackageInfo::operator==` instead
-//                    CHECK_EQ(resolvo_package_info.name, libsolv_package_info.name);
-//                    CHECK_EQ(resolvo_package_info.version, libsolv_package_info.version);
-//                    CHECK_EQ(resolvo_package_info.build_string, libsolv_package_info.build_string);
-//                }
-            }
         }
     }
 
@@ -1268,7 +1366,7 @@ TEST_SUITE("solver::resolvo")
                 );
 
                 // Print all the packages from libsolv
-                std::cout << "libsolv resolution" << std::endl;
+                std::cout << "libsolv resolution:" << std::endl;
                 for (const auto& package_info : libsolv_resolution)
                 {
                     std::cout << " - " << package_info.long_str() << std::endl;
@@ -1277,7 +1375,7 @@ TEST_SUITE("solver::resolvo")
                 std::cout << std::endl;
 
                 // Print all the packages from resolvo
-                std::cout << "resolvo resolution" << std::endl;
+                std::cout << "resolvo resolution:" << std::endl;
                 for (const auto& package_info : resolvo_resolution)
                 {
                     std::cout << " - " << package_info.long_str() << std::endl;
