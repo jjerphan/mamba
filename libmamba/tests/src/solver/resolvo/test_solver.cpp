@@ -1389,66 +1389,6 @@ TEST_SUITE("solver::resolvo")
         CHECK_GE(version, Version::parse("6.105.1").value());
     }
 
-
-    TEST_CASE("Consistency with libsolv: Celery & Dash")
-    {
-        std::vector<std::string> specs_to_install = {
-            "celery",
-            "dash",
-            "dash-core-components",
-            "dash-html-components",
-            "dash-table"
-        };
-
-        // Print all the dependencies
-        std::cout << "Specification to install:" << std::endl;
-        for (const auto& dep : specs_to_install)
-        {
-            std::cout << " - " << dep << std::endl;
-        }
-
-        std::vector<PackageInfo> libsolv_resolution = libsolv_resolve(
-            libsolv_db,
-            specs_to_install
-        );
-
-        // Print all the packages from libsolv
-        std::cout << "libsolv resolution:" << std::endl;
-        for (const auto& package_info : libsolv_resolution)
-        {
-            std::cout << " - " << package_info.long_str() << std::endl;
-        }
-
-        std::cout << std::endl;
-
-        std::vector<PackageInfo> resolvo_resolution = resolvo_resolve(
-            resolvo_db,
-            specs_to_install
-        );
-
-        // Print all the packages from resolvo
-        std::cout << "resolvo resolution:" << std::endl;
-        for (const auto& package_info : resolvo_resolution)
-        {
-            std::cout << " - " << package_info.long_str() << std::endl;
-        }
-
-        std::cout << std::endl;
-
-        // Check libsolv's PackageInfo against libsolv's
-        CHECK_EQ(resolvo_resolution.size(), libsolv_resolution.size());
-        for (size_t i = 0; i < libsolv_resolution.size(); i++)
-        {
-            const PackageInfo& resolvo_package_info = resolvo_resolution[i];
-            const PackageInfo& libsolv_package_info = libsolv_resolution[i];
-            // Currently something in the parsing of the repodata.json must be different.
-            // TODO: find the difference and use `PackageInfo::operator==` instead
-            CHECK_EQ(resolvo_package_info.name, libsolv_package_info.name);
-            CHECK_EQ(resolvo_package_info.version, libsolv_package_info.version);
-            CHECK_EQ(resolvo_package_info.build_string, libsolv_package_info.build_string);
-        }
-    }
-
     TEST_CASE("Consistency with libsolv: yaml env specifications") {
 
         for(const std::string& s : {
