@@ -1257,10 +1257,10 @@ TEST_SUITE("solver::resolvo")
         std::cout << "Number of solvables: " << database.solvable_pool.size() << std::endl;
     }
 
-    TEST_CASE("mamba-org/rattler/issues/684")
+    TEST_CASE("Known hard specifications")
     {
         for (const std::vector<std::string>& specs_to_install : std::initializer_list<std::vector<std::string>> {
-            // TODO: Currently does not probably due to the ordering of the packages on track features
+            // See: https://github.com/mamba-org/rattler/issues/684
             {"arrow-cpp", "libabseil"},
             {"mlflow=2.12.2"},
             {"orange3=3.36.2"},
@@ -1268,7 +1268,12 @@ TEST_SUITE("solver::resolvo")
             {"ray-default=2.6.3"},
             {"spark-nlp=5.1.2"},
             {"spyder=5.5.1"},
-            {"streamlit-faker=0.0.2"}
+            {"streamlit-faker=0.0.2"},
+            // See: https://github.com/conda-forge/rubinenv-feedstock/blob/main/recipe/meta.yaml#L45-L191
+            {"rubin-env-nosysroot"},
+            {"rubin-env"},
+            {"rubin-env-rsp"},
+            {"rubin-env-developer"}
         })
         {
             SUBCASE("")
@@ -1299,9 +1304,6 @@ TEST_SUITE("solver::resolvo")
 //                    std::cout << " - " << package_info.long_str() << std::endl;
 //                }
 
-                // CHECK_GT(resolvo_resolution.size(), 0);
-                // CHECK_GT(libsolv_resolution.size(), 0);
-                // Check libsolv's PackageInfo against libsolv's
                 CHECK_EQ(resolvo_resolution.size(), libsolv_resolution.size());
                 for (size_t i = 0; i < std::min(resolvo_resolution.size(), libsolv_resolution.size()); i++)
                 {
@@ -1328,59 +1330,4 @@ TEST_SUITE("solver::resolvo")
         CHECK_GE(version, Version::parse("6.105.1").value());
     }
 
-    TEST_CASE("Consistency with libsolv: robin-env specifications") {
-        for (const std::string& specification: {
-            // See: https://github.com/conda-forge/rubinenv-feedstock/blob/main/recipe/meta.yaml#L45-L191
-            "rubin-env-nosysroot",
-//            "rubin-env",
-//            "rubin-env-rsp",
-//            "rubin-env-developer"
-        })
-        {
-            SUBCASE("")
-            {
-                std::cout << "Resolving " << specification << std::endl;
-
-                std::vector<std::string> specs_to_install = {specification};
-
-//                std::vector<PackageInfo> libsolv_resolution = libsolv_resolve(
-//                    libsolv_db,
-//                    specs_to_install
-//                );
-                std::vector<PackageInfo> resolvo_resolution = resolvo_resolve(
-                    resolvo_db,
-                    specs_to_install
-                );
-
-//                // Print all the packages from libsolv
-//                std::cout << "libsolv resolution:" << std::endl;
-//                for (const auto& package_info : libsolv_resolution)
-//                {
-//                    std::cout << " - " << package_info.long_str() << std::endl;
-//                }
-
-                std::cout << std::endl;
-
-                // Print all the packages from resolvo
-                std::cout << "resolvo resolution:" << std::endl;
-                for (const auto& package_info : resolvo_resolution)
-                {
-                    std::cout << " - " << package_info.long_str() << std::endl;
-                }
-
-//                // Check libsolv's PackageInfo against libsolv's
-//                CHECK_EQ(resolvo_resolution.size(), libsolv_resolution.size());
-//                for (size_t i = 0; i < libsolv_resolution.size(); i++)
-//                {
-//                    const PackageInfo& resolvo_package_info = resolvo_resolution[i];
-//                    const PackageInfo& libsolv_package_info = libsolv_resolution[i];
-//                    // Currently something in the parsing of the repodata.json must be different.
-//                    // TODO: find the difference and use `PackageInfo::operator==` instead
-//                    CHECK_EQ(resolvo_package_info.name, libsolv_package_info.name);
-//                    CHECK_EQ(resolvo_package_info.version, libsolv_package_info.version);
-//                    CHECK_EQ(resolvo_package_info.build_string, libsolv_package_info.build_string);
-//                }
-            }
-        }
-    }
 }
