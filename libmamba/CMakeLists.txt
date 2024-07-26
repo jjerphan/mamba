@@ -191,6 +191,10 @@ set(
     ${LIBMAMBA_SOURCE_DIR}/solver/libsolv/matcher.cpp
     ${LIBMAMBA_SOURCE_DIR}/solver/libsolv/solver.cpp
     ${LIBMAMBA_SOURCE_DIR}/solver/libsolv/unsolvable.cpp
+    # Solver resolvo implementation
+    ${LIBMAMBA_SOURCE_DIR}/solver/resolvo/database.cpp
+    ${LIBMAMBA_SOURCE_DIR}/solver/resolvo/solver.cpp
+    ${LIBMAMBA_SOURCE_DIR}/solver/resolvo/unsolvable.cpp
     # Artifacts validation
     ${LIBMAMBA_SOURCE_DIR}/validation/tools.cpp
     ${LIBMAMBA_SOURCE_DIR}/validation/errors.cpp
@@ -331,6 +335,10 @@ set(
     ${LIBMAMBA_INCLUDE_DIR}/mamba/solver/libsolv/database.hpp
     ${LIBMAMBA_INCLUDE_DIR}/mamba/solver/libsolv/solver.hpp
     ${LIBMAMBA_INCLUDE_DIR}/mamba/solver/libsolv/unsolvable.hpp
+    # Solver resolvo implementation
+    ${LIBMAMBA_INCLUDE_DIR}/mamba/solver/resolvo/database.hpp
+    ${LIBMAMBA_INCLUDE_DIR}/mamba/solver/resolvo/solver.hpp
+    ${LIBMAMBA_INCLUDE_DIR}/mamba/solver/resolvo/unsolvable.hpp
     # Artifacts validation
     ${LIBMAMBA_INCLUDE_DIR}/mamba/validation/tools.hpp
     ${LIBMAMBA_INCLUDE_DIR}/mamba/validation/errors.hpp
@@ -412,6 +420,8 @@ find_package(yaml-cpp REQUIRED)
 find_package(reproc REQUIRED)
 find_package(reproc++ REQUIRED)
 find_package(Libsolv REQUIRED)
+find_package(Resolvo REQUIRED)
+
 add_subdirectory(ext/solv-cpp)
 
 macro(libmamba_create_target target_name linkage output_name)
@@ -460,6 +470,7 @@ macro(libmamba_create_target target_name linkage output_name)
                 solv::libsolv_static
                 solv::libsolvext_static
                 solv::cpp
+                Resolvo::Resolvo
         )
 
         if(UNIX)
@@ -606,6 +617,7 @@ macro(libmamba_create_target target_name linkage output_name)
                 solv::libsolv
                 solv::libsolvext
                 solv::cpp
+                Resolvo::Resolvo
         )
     endif()
 
