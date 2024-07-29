@@ -44,7 +44,7 @@ namespace mamba::fs
     }
 #endif
 
-#if __cplusplus == 201703L
+#if __cplusplus >= 201703L
     std::string to_utf8(const std::filesystem::path& path)
     {
         return normalized_separators(path).u8string();

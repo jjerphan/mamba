@@ -42,7 +42,7 @@ target_include_directories(bindings PRIVATE src/libmambapy/bindings)
 mamba_target_add_compile_warnings(bindings WARNING_AS_ERROR ${MAMBA_WARNING_AS_ERROR})
 
 target_link_libraries(bindings PRIVATE pybind11::pybind11 ${libmamba_target})
-target_compile_features(bindings PRIVATE cxx_std_17)
+target_compile_features(bindings PRIVATE cxx_std_20)
 
 # Installation
 

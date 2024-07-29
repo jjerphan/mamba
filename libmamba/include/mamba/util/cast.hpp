@@ -13,8 +13,6 @@
 
 #include <fmt/format.h>
 
-#include "mamba/util/compare.hpp"
-
 namespace mamba::util
 {
     /**
@@ -62,17 +60,17 @@ namespace mamba::util
         }
         else if constexpr (std::is_integral_v<From> && std::is_integral_v<To>)
         {
-            if constexpr (cmp_less(from_lowest, to_lowest))
+            if constexpr (std::cmp_less(from_lowest, to_lowest))
             {
-                if (cmp_less(val, to_lowest))
+                if (std::cmp_less(val, to_lowest))
                 {
                     throw detail::make_overflow_error<To>(val);
                 }
             }
 
-            if constexpr (cmp_greater(from_max, to_max))
+            if constexpr (std::cmp_greater(from_max, to_max))
             {
-                if (cmp_greater(val, to_max))
+                if (std::cmp_greater(val, to_max))
                 {
                     throw detail::make_overflow_error<To>(val);
                 }

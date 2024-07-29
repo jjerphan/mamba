@@ -4,7 +4,7 @@ add_executable(testing_libmamba_lock libmamba_lock/lock.cpp)
 
 target_link_libraries(testing_libmamba_lock PUBLIC mamba::libmamba)
 
-target_compile_features(testing_libmamba_lock PUBLIC cxx_std_17)
+target_compile_features(testing_libmamba_lock PUBLIC cxx_std_20)
 
 mamba_target_add_compile_warnings(testing_libmamba_lock WARNING_AS_ERROR ${MAMBA_WARNING_AS_ERROR})
 
@@ -14,7 +14,6 @@ set(
     src/test_main.cpp
     # Utility library
     src/util/test_cast.cpp
-    src/util/test_compare.cpp
     src/util/test_cryptography.cpp
     src/util/test_encoding.cpp
     src/util/test_environment.cpp
@@ -132,7 +131,7 @@ target_compile_definitions(
         MAMBA_TEST_LOCK_EXE="$<TARGET_FILE:testing_libmamba_lock>"
 )
 
-target_compile_features(test_libmamba PUBLIC cxx_std_17)
+target_compile_features(test_libmamba PUBLIC cxx_std_20)
 
 add_custom_target(
     test

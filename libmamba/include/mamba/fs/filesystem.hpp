@@ -682,7 +682,7 @@ namespace mamba::fs
 
         bool operator!=(const directory_entry& other) const noexcept
         {
-            return std::filesystem::directory_entry::operator!=(other);
+            return not std::filesystem::directory_entry::operator==(other);
         }
 
         u8path path() const
