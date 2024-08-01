@@ -229,7 +229,7 @@ namespace mamba
                                 .value();
             db.for_each_package_matching(
                 ms,
-                [&](specs::PackageInfo&& pkg) { g.add_node(std::move(pkg)); }
+                [&](const specs::PackageInfo&& pkg) { g.add_node(std::move(pkg)); }
             );
         }
 
@@ -259,7 +259,7 @@ namespace mamba
             QueryResult::dependency_graph g;
             db.for_each_package_depending_on(
                 ms,
-                [&](specs::PackageInfo&& pkg) { g.add_node(std::move(pkg)); }
+                [&](const specs::PackageInfo&& pkg) { g.add_node(std::move(pkg)); }
             );
             return { QueryType::WhoNeeds, std::move(query), std::move(g) };
         }

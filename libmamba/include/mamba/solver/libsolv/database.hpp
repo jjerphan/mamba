@@ -118,14 +118,15 @@ namespace mamba::solver::libsolv
 
         [[nodiscard]] auto package_count() const -> std::size_t;
 
-        template <typename Func>
-        void for_each_package_in_repo(RepoInfo repo, Func&&) const;
+        using package_info_visitor = std::variant<
+            std::function<decltype(util::LoopControl::Break)>(const specs::PackageInfo&),
+            std::function<void(const specs::PackageInfo&)>>;
 
-        template <typename Func>
-        void for_each_package_matching(const specs::MatchSpec& ms, Func&&);
+        void for_each_package_in_repo(RepoInfo repo, package_info_visitor&&) const;
 
-        template <typename Func>
-        void for_each_package_depending_on(const specs::MatchSpec& ms, Func&&);
+        void for_each_package_matching(const specs::MatchSpec& ms, package_info_visitor&&);
+
+        void for_each_package_depending_on(const specs::MatchSpec& ms, package_info_visitor&&);
 
         /**
          * An access control wrapper.
@@ -201,61 +202,81 @@ namespace mamba::solver::libsolv
     }
 
     // TODO(C++20): Use ranges::transform
-    template <typename Func>
-    void Database::for_each_package_in_repo(RepoInfo repo, Func&& func) const
+    void Database::for_each_package_in_repo(RepoInfo repo, package_info_visitor&& func) const
     {
-        for (auto id : packages_in_repo(repo))
+        if (std::holds_alternative<
+                std::function<decltype(util::LoopControl::Break)(const specs::PackageInfo&)>>(func))
         {
-            if constexpr (std::is_same_v<decltype(func(package_id_to_package_info(id))), util::LoopControl>)
+            const auto& func_ = std::get<
+                std::function<decltype(util::LoopControl::Break)(const specs::PackageInfo&)>>(func);
+            for (auto id : packages_in_repo(repo))
             {
-                if (func(package_id_to_package_info(id)) == util::LoopControl::Break)
+                if (func_(package_id_to_package_info(id)) == util::LoopControl::Break)
                 {
                     break;
                 }
             }
-            else
+        }
+        else
+        {
+            for (auto id : packages_in_repo(repo))
             {
-                func(package_id_to_package_info(id));
+                std::get<std::function<void(const specs::PackageInfo&)>>(func)(
+                    package_id_to_package_info(id)
+                );
             }
         }
     }
 
     // TODO(C++20): Use ranges::transform
-    template <typename Func>
-    void Database::for_each_package_matching(const specs::MatchSpec& ms, Func&& func)
+    void Database::for_each_package_matching(const specs::MatchSpec& ms, package_info_visitor&& func)
     {
-        for (auto id : packages_matching_ids(ms))
+        if (std::holds_alternative<
+                std::function<decltype(util::LoopControl::Break)(const specs::PackageInfo&)>>(func))
         {
-            if constexpr (std::is_same_v<decltype(func(package_id_to_package_info(id))), util::LoopControl>)
+            const auto& func_ = std::get<
+                std::function<decltype(util::LoopControl::Break)(const specs::PackageInfo&)>>(func);
+            for (auto id : packages_matching_ids(ms))
             {
-                if (func(package_id_to_package_info(id)) == util::LoopControl::Break)
+                if (func_(package_id_to_package_info(id)) == util::LoopControl::Break)
                 {
                     break;
                 }
             }
-            else
+        }
+        else
+        {
+            const auto& func_ = std::get<std::function<void(const specs::PackageInfo&)>>(func);
+            for (auto id : packages_matching_ids(ms))
             {
-                func(package_id_to_package_info(id));
+                func_(package_id_to_package_info(id));
             }
         }
     }
 
     // TODO(C++20): Use ranges::transform
-    template <typename Func>
-    void Database::for_each_package_depending_on(const specs::MatchSpec& ms, Func&& func)
+    void
+    Database::for_each_package_depending_on(const specs::MatchSpec& ms, package_info_visitor&& func)
     {
-        for (auto id : packages_depending_on_ids(ms))
+        if (std::holds_alternative<
+                std::function<decltype(util::LoopControl::Break)(const specs::PackageInfo&)>>(func))
         {
-            if constexpr (std::is_same_v<decltype(func(package_id_to_package_info(id))), util::LoopControl>)
+            const auto& func_ = std::get<
+                std::function<decltype(util::LoopControl::Break)(const specs::PackageInfo&)>>(func);
+            for (auto id : packages_depending_on_ids(ms))
             {
-                if (func(package_id_to_package_info(id)) == util::LoopControl::Break)
+                if (func_(package_id_to_package_info(id)) == util::LoopControl::Break)
                 {
                     break;
                 }
             }
-            else
+        }
+        else
+        {
+            const auto& func_ = std::get<std::function<void(const specs::PackageInfo&)>>(func);
+            for (auto id : packages_depending_on_ids(ms))
             {
-                func(package_id_to_package_info(id));
+                func_(package_id_to_package_info(id));
             }
         }
     }
