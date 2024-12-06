@@ -444,15 +444,15 @@ namespace mamba
         // Get the name of the environment
         const auto environment = env_name(ctx);
 
-        // Check if the target prefix is active
-        if (util::get_env("CONDA_PREFIX") == ctx.prefix_params.target_prefix)
+        Console::stream() << "\nTransaction finished\n";
+
+        auto active_prefix = util::get_env("CONDA_PREFIX");
+        auto target_prefix_is_active_prefix = active_prefix == ctx.prefix_params.target_prefix;
+        auto environment_present_on_disk = fs::exists(ctx.prefix_params.target_prefix);
+
+        if (environment_present_on_disk || target_prefix_is_active_prefix)
         {
-            Console::stream() << "\nTransaction finished\n";
-        }
-        else
-        {
-            Console::stream() << "\nTransaction finished\n\n"
-                                 "To activate this environment, use:\n\n"
+            Console::stream() << "To activate this environment, use:\n\n"
                                  "    "
                               << executable << " activate " << environment
                               << "\n\n"
