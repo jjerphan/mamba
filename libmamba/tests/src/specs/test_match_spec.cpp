@@ -643,6 +643,15 @@ namespace
             REQUIRE(ms.build_string().str() == "^.*(accelerate|mkl)$");
             REQUIRE_FALSE(ms.build_string().is_glob());
         }
+
+        SECTION("name[version=\"=*,=0*\",build=\"build*\"]")
+        {
+            auto ms = MatchSpec::parse("name[version=\"=*,=0*\",build=\"build*\"]").value();
+            REQUIRE(ms.name().str() == "name");
+            REQUIRE(ms.version().str() == "=*,=0*");
+            REQUIRE(ms.build_string().str() == "build*");
+            REQUIRE(ms.str() == "name[version=\"=*,=0*\",build=\"build*\"]");
+        }
     }
 
     TEST_CASE("parse_url")

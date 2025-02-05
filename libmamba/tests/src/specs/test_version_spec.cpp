@@ -422,6 +422,13 @@ namespace
             REQUIRE(vs.str() == "=2.3,<3.0");
             REQUIRE(vs.str_conda_build() == "2.3.*,<3.0");
         }
+
+        SECTION("*.0.0")
+        {
+            auto vs = VersionSpec::parse("*.0.0").value();
+            REQUIRE(vs.str() == ".*.0.0");
+            REQUIRE(vs.str_conda_build() == ".*.0.0");
+        }
     }
 
     TEST_CASE("VersionSpec::is_explicitly_free")
