@@ -5,8 +5,8 @@
 // The full license is in the file LICENSE, distributed with this software.
 
 #include <algorithm>
-#include <stdexcept>
 #include <iostream>
+#include <stdexcept>
 #include <variant>
 
 #include "mamba/api/channel_loader.hpp"
@@ -461,7 +461,8 @@ namespace mamba
             using Outcome = std::variant<solver::Solution, solver::libsolv::UnSolvable>;
             Outcome outcome;
 
-            if (true) { // const char *resolvo = std::getenv("MAMBA_RESOLVO"); resolvo) {
+            if (true)
+            {  // const char *resolvo = std::getenv("MAMBA_RESOLVO"); resolvo) {
                 solver::resolvo_cpp::PackageDatabase resolvo_db;
                 // Fill `m` using `prefix_data.m_package_record` (as the state of
                 // `mamba::solver::libsolv::DataBase` seem unreachable).
@@ -470,7 +471,7 @@ namespace mamba
                 // uint32_t: decltype(resolvo::SolvableId.id)
                 std::map<uint32_t, specs::PackageInfo> m;
 
-                for(auto& [name, record] : prefix_data.records())
+                for (auto& [name, record] : prefix_data.records())
                 {
                     resolvo::Dependencies record_deps;
                     resolvo::Vector<resolvo::VersionSetId> requirements;
@@ -480,10 +481,10 @@ namespace mamba
                     {
                         auto dep_ms = specs::MatchSpec::parse(dep).value();
 
-                        auto package_ids = db.packages_matching_ids(dep_ms);
-                        for(auto package_id: package_ids)
+                        auto package_ids = resolvo_db.packages_matching_ids(dep_ms);
+                        for (auto package_id : package_ids)
                         {
-                            auto package_info = db.package_id_to_package_info(package_id);
+                            auto package_info = resolvo_db.package_id_to_package_info(package_id);
                             requirements.push_back(
                                 // TODO modify this API and the associated structures used
                                 resolvo_db.alloc_requirement(
@@ -500,10 +501,10 @@ namespace mamba
                     {
                         auto cons_ms = specs::MatchSpec::parse(cons).value();
 
-                        auto package_ids = db.packages_matching_ids(cons_ms);
-                        for(auto package_id: package_ids)
+                        auto package_ids = resolvo_db.packages_matching_ids(cons_ms);
+                        for (auto package_id : package_ids)
                         {
-                            auto package_info = db.package_id_to_package_info(package_id);
+                            auto package_info = resolvo_db.package_id_to_package_info(package_id);
                             requirements.push_back(
                                 // TODO modify this API and the associated structures used
                                 resolvo_db.alloc_requirement(
@@ -534,24 +535,36 @@ namespace mamba
 
                 // Solve the problem
                 resolvo::Vector<resolvo::SolvableId> result;
-                resolvo::String resolvo_solver_result = resolvo::solve(resolvo_db, requirements, constraints, result);
+                resolvo::String resolvo_solver_result = resolvo::solve(
+                    resolvo_db,
+                    requirements,
+                    constraints,
+                    result
+                );
 
                 if (resolvo_solver_result == "")
                 {  // Success
                     solver::Solution solution;
 
-                    for (auto solvable_id: result)
+                    std::cout << "Solved problem with " << result.size() << " packages\n"
+                              << std::endl;
+
+                    for (auto solvable_id : result)
                     {
                         specs::PackageInfo& solvable_package_info = m[solvable_id.id];
-                        solution.actions.push_back(solver::Solution::Install{solvable_package_info});
+                        solution.actions.push_back(solver::Solution::Install{ solvable_package_info });
                     }
 
                     outcome = solution;
-                } else
+                }
+                else
                 {  // Failure
+                    std::cout << "Failure with:" << resolvo_solver_result << std::endl;
+
                     outcome = solver::Solution{};
                 }
-            } else
+            }
+            else
             {
                 // Use libsolv
                 outcome = solver::libsolv::Solver().solve(db, request).value();
