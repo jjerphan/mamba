@@ -97,10 +97,6 @@ namespace mamba
 
         void clear_cache() const;
 
-    private:
-
-        struct CheckSumParams;
-
         bool use_oci() const;
         const std::string& filename() const;
         std::string channel() const;
@@ -109,6 +105,10 @@ namespace mamba
         const std::string& sha256() const;
         const std::string& md5() const;
         std::size_t expected_size() const;
+
+    private:
+
+        struct CheckSumParams;
 
         ValidationResult validate_size(std::size_t downloaded_size) const;
         ValidationResult validate_checksum(const CheckSumParams& params) const;
