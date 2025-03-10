@@ -121,6 +121,23 @@ namespace mamba::solver::libsolv
         // Instead use something like:
         // const int level = Context().output_params.verbosity - 1;
         // ::pool_setdebuglevel(pool().raw(), level);
+        //
+        // For now we report logs associated to libsolv's log level 1, i.e.:
+        //
+        //  - SOLV_DEBUG_RESULT (from level 0)
+        //  - SOLV_DEBUG_STATS
+        //  - SOLV_DEBUG_ANALYZE
+        //  - SOLV_DEBUG_UNSOLVABLE
+        //  - SOLV_DEBUG_SOLVER
+        //  - SOLV_DEBUG_TRANSACTION
+        //  - SOLV_ERROR
+        //
+        // See:
+        // https://github.com/openSUSE/libsolv/blob/2a8217d6dddd2592e80b3e72764f6a3fef6b60db/doc/libsolv-pool.txt#debugging-and-error-reporting
+        // https://github.com/openSUSE/libsolv/blob/27aa6a72c7db73d78aa711ae412231768e77c9e0/src/pool.c#L1623-L1637
+        const int libsolv_log_level = 1;
+        ::pool_setdebuglevel(pool().raw(), libsolv_log_level);
+
         pool().set_debug_callback(
             [logger = std::move(callback)](const solv::ObjPoolView&, int type, std::string_view msg) noexcept
             {
