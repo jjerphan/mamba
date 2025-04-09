@@ -1,0 +1,84 @@
+name: Sanitizers
+
+on:
+  push:
+    branches:
+      - main
+      - feat/*
+  pull_request:
+    branches:
+      - main
+      - feat/*
+    paths-ignore:
+      - "docs/**"
+      - "**.md"
+  merge_group:
+    types: [checks_requested]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    # micromamba activation
+    shell: bash -l -eo pipefail {0}
+
+jobs:
+  sanitizers:
+    name: "${{ matrix.sanitizer }}"
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        sanitizer: [asan, ubsan, tsan, msan]
+    steps:
+      - name: Checkout mamba repository
+        uses: actions/checkout@v4
+      - name: Create build environment
+        uses: mamba-org/setup-micromamba@v2
+        with:
+          environment-file: ./dev/environment-dev.yml
+          environment-name: build_env
+          cache-environment: true
+      - name: Install dev-extra environment
+        run: micromamba install -n build_env -y -f ./dev/environment-dev-extra.yml
+      - uses: hendrikmuhs/ccache-action@main
+        with:
+          variant: sccache
+          key: ${{ github.job }}-${{ github.runner.os }}
+          restore-keys: |
+            ccache-libmamba-${{ github.runner.os }}
+      - name: Build with ${{ matrix.sanitizer }}
+        run: |
+          cmake -B build/ -G Ninja \
+            --preset mamba-unix-shared-debug \
+            -D CMAKE_CXX_COMPILER_LAUNCHER=sccache \
+            -D CMAKE_C_COMPILER_LAUNCHER=sccache \
+            -D MAMBA_WARNING_AS_ERROR=ON \
+            -D BUILD_LIBMAMBAPY=OFF \
+            -D BUILD_MICROMAMBA=OFF \
+            -D BUILD_MAMBA=OFF \
+            -D ENABLE_MAMBA_ROOT_PREFIX_FALLBACK=OFF \
+            -D CMAKE_BUILD_TYPE=Debug \
+            -D CMAKE_CXX_FLAGS_DEBUG="-g -O0 -fno-omit-frame-pointer ${{ matrix.sanitizer_flags }}" \
+            -D CMAKE_C_FLAGS_DEBUG="-g -O0 -fno-omit-frame-pointer ${{ matrix.sanitizer_flags }}"
+          cmake --build build/ --parallel
+      - name: Show build cache statistics
+        run: sccache --show-stats
+      - name: Run C++ tests with ${{ matrix.sanitizer }}
+        continue-on-error: true
+        run: |
+          unset CONDARC  # Interferes with tests
+          ./build/libmamba/ext/solv-cpp/tests/test_solv_cpp
+          ./build/libmamba/tests/test_libmamba
+      - name: Archive build artifact
+        if: failure()
+        run: tar -czf ${{ github.workspace }}/libmamba-build-failed-${{ matrix.sanitizer }}.tar.gz ${{ github.workspace }}/build/
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: libmamba-build-failed-${{ matrix.sanitizer }}
+          path: ${{ github.workspace }}/libmamba-build-failed-${{ matrix.sanitizer }}.tar.gz
+          retention-days: 7 
