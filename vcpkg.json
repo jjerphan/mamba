@@ -1,27 +1,41 @@
 {
-  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
-  "dependencies": [
-    "zstd",
-    "curl",
-    {
-      "name": "winreg",
-      "platform": "windows"
-    },
-    {
-      "features": ["bzip2", "lz4", "lzma", "lzo", "crypto", "zstd"],
-      "name": "libarchive"
-    },
-    {
-      "host": true,
-      "name": "vcpkg-cmake"
-    },
-    {
-      "host": true,
-      "name": "vcpkg-cmake-config"
-    }
-  ],
-  "homepage": "https://github.com/mamba-org/mamba",
-  "license": "BSD-3-Clause",
-  "name": "micromamba",
-  "supports": "x64 | (arm64 & !windows)"
+    "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+    "name": "mamba",
+    "version": "2.1.0",
+    "homepage": "https://github.com/mamba-org/mamba",
+    "license": "BSD-3-Clause",
+    "supports": "x64",
+    "dependencies": [
+        "zstd",
+        "curl",
+        {
+            "name": "winreg",
+            "platform": "windows"
+        },
+        {
+            "features": ["bzip2", "lz4", "lzma", "lzo", "crypto", "zstd"],
+            "name": "libarchive"
+        },
+        {
+            "host": true,
+            "name": "vcpkg-cmake"
+        },
+        {
+            "host": true,
+            "name": "vcpkg-cmake-config"
+        },
+        "cli11",
+        "tl-expected",
+        "simdjson",
+        "nlohmann-json",
+        "spdlog",
+        "fmt",
+        "yaml-cpp",
+        "reproc",
+        "catch2",
+        "libssh2",
+        "nghttp2",
+        "krb5",
+        "zlib"
+    ]
 }
