@@ -107,7 +107,7 @@ namespace mamba
             m_writable = Writable::WRITABLE;
             LOG_DEBUG << "'" << m_path.string() << "' writable";
         }
-        catch (const fs::filesystem_error&)
+        catch (const std::filesystem::filesystem_error&)
         {
             m_writable = Writable::NOT_WRITABLE;
             LOG_DEBUG << "'" << m_path.string() << "' not writable";

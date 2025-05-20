@@ -121,5 +121,7 @@ namespace mamba::util
      * If the path starts with the user home directory, replace it with a leading '~'.
      */
     [[nodiscard]] auto shrink_home(std::string_view path) -> std::string;
+
+    std::string expand_vars(const std::string& s);
 }
 #endif

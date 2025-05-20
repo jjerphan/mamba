@@ -159,17 +159,27 @@ namespace mamba::util
     template <typename Range>
     auto which_in(std::string_view exe, const Range& search_paths) -> fs::u8path
     {
-        if constexpr (std::is_same_v<Range, fs::u8path>)
+        if (exe.empty())
         {
-            return detail::which_in_one(exe, search_paths);
+            return fs::u8path::empty_path();
         }
-        else if constexpr (std::is_convertible_v<Range, std::string_view>)
+
+        if (fs::u8path(exe).is_absolute())
         {
-            return detail::which_in_split(exe, search_paths);
+            return fs::u8path(exe);
+        }
+
+        if constexpr (std::is_convertible_v<Range, std::string_view>)
+        {
+            return detail::which_in_split(fs::u8path(exe), std::string_view(search_paths));
+        }
+        else if constexpr (std::is_same_v<Range, fs::u8path>)
+        {
+            return detail::which_in_one(fs::u8path(exe), search_paths);
         }
         else
         {
-            return which_in(exe, search_paths.cbegin(), search_paths.cend());
+            return which_in(exe, std::begin(search_paths), std::end(search_paths));
         }
     }
 }

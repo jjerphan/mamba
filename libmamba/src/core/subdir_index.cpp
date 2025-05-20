@@ -944,14 +944,16 @@ namespace mamba
 
         {
             auto lock = LockFile(json_file);
-            fs::last_write_time(json_file, fs::now());
+            std::error_code ec;
+            fs::last_write_time(json_file, fs::now(), ec);
             m_json_cache_valid = true;
         }
 
         if (fs::is_regular_file(solv_file) && solv_age.count() <= json_age.count())
         {
             auto lock = LockFile(solv_file);
-            fs::last_write_time(solv_file, fs::now());
+            std::error_code ec;
+            fs::last_write_time(solv_file, fs::now(), ec);
             m_solv_cache_valid = true;
         }
 
@@ -999,11 +1001,11 @@ namespace mamba
 
         const auto permissions = fs::perms::owner_all | fs::perms::group_all
                                  | fs::perms::others_read | fs::perms::others_exec;
-        fs::permissions(cache_dir, permissions, fs::perm_options::replace);
+        fs::permissions(cache_dir, permissions, std::filesystem::perm_options::replace);
         LOG_TRACE << "Set permissions on cache directory " << cache_dir << " to 'rwxrwxr-x'";
 
         std::error_code ec;
-        fs::permissions(cache_dir, fs::perms::set_gid, fs::perm_options::add, ec);
+        fs::permissions(cache_dir, fs::perms::set_gid, std::filesystem::perm_options::add, ec);
 
         if (!ec)
         {

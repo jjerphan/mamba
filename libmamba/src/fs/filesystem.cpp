@@ -9,6 +9,9 @@
 #endif
 #include <filesystem>
 #include <string>
+#include <string_view>
+
+#include <fmt/format.h>
 
 #ifndef _WIN32
 #include <fcntl.h>
@@ -44,7 +47,6 @@ namespace mamba::fs
     }
 #endif
 
-#if __cplusplus == 201703L
     std::string to_utf8(const std::filesystem::path& path, Utf8Options utf8_options)
     {
         if (utf8_options.normalize_sep)
@@ -61,9 +63,6 @@ namespace mamba::fs
     {
         return normalized_separators(std::filesystem::u8path(u8string));
     }
-#else
-#error UTF8 functions implementation is specific to C++17, using another version requires a different implementation.
-#endif
 
     void last_write_time(const u8path& path, now, std::error_code& ec) noexcept
     {

@@ -494,7 +494,7 @@ namespace mamba
                     {
                         fs::create_directories(dir);
                     }
-                    catch (const fs::filesystem_error& e)
+                    catch (const std::filesystem::filesystem_error& e)
                     {
                         LOG_WARNING << "Error creating directory " << dir << ": " << e.what()
                                     << std::endl;
@@ -1261,10 +1261,7 @@ namespace mamba
             out << YAML::Comment(std::string(54, '#'));
         }
 
-        void dump_configurable(nl::json& node, const Configurable& c, const std::string& name)
-        {
-            c.dump_json(node, name);
-        }
+        void dump_configurable(nl::json& node, const Configurable& c, const std::string& name);
     }
 
     /********************************
@@ -2521,8 +2518,9 @@ namespace mamba
             }
             else if (fs::is_directory(l))
             {
-                for (fs::u8path p : fs::directory_iterator(l))
+                for (const auto& entry : fs::directory_iterator(l))
                 {
+                    fs::u8path p = entry.path();
                     if (detail::is_config_file(p))
                     {
                         sources.push_back(p);

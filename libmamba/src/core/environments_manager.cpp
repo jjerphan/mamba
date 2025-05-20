@@ -153,9 +153,10 @@ namespace mamba
             {
                 for (auto& potential_env : fs::directory_iterator(d))
                 {
-                    if (is_conda_environment(potential_env))
+                    fs::u8path env_path(potential_env.path());
+                    if (is_conda_environment(env_path))
                     {
-                        all_env_paths.insert(potential_env);
+                        all_env_paths.insert(env_path);
                     }
                 }
             }

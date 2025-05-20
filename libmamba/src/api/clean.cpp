@@ -85,7 +85,7 @@ namespace mamba
                             try
                             {
                                 LOG_INFO << "Removing lock file '" << p.path().string() << "'";
-                                fs::remove(p);
+                                fs::remove(p.path());
                             }
                             catch (...)
                             {
@@ -98,14 +98,15 @@ namespace mamba
 
                 if (fs::exists(pkg_cache->path() / "cache"))
                 {
-                    for (auto& p : fs::recursive_directory_iterator(pkg_cache->path() / "cache"))
+                    for (auto& p :
+                         std::filesystem::recursive_directory_iterator(pkg_cache->path() / "cache"))
                     {
                         if (p.exists() && util::ends_with(p.path().string(), ".lock"))
                         {
                             try
                             {
                                 LOG_INFO << "Removing lock file '" << p.path().string() << "'";
-                                fs::remove(p);
+                                fs::remove(p.path());
                             }
                             catch (...)
                             {
@@ -130,7 +131,7 @@ namespace mamba
                 if (p.is_directory() && fs::exists(p.path() / "conda-meta"))
                 {
                     LOG_DEBUG << "Found environment: " << p.path();
-                    envs.push_back(p);
+                    envs.push_back(p.path());
                 }
             }
         }
@@ -229,7 +230,7 @@ namespace mamba
         auto get_folder_size = [](auto& p)
         {
             std::size_t size = 0;
-            for (auto& fp : fs::recursive_directory_iterator(p))
+            for (auto& fp : std::filesystem::recursive_directory_iterator(p))
             {
                 if (!fp.is_symlink() && !fp.is_directory())
                 {

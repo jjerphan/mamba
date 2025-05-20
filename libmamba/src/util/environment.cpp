@@ -357,54 +357,72 @@ namespace mamba::util
 
     namespace
     {
-        auto
+        fs::u8path
         which_in_one_impl(const fs::u8path& exe, const fs::u8path& dir, const fs::u8path& extension)
-            -> fs::u8path
         {
-            std::error_code _ec;  // ignore
-            if (!fs::exists(dir, _ec) || !fs::is_directory(dir, _ec))
+            if (!fs::exists(dir) || !fs::is_directory(dir))
             {
-                return "";  // Not found
+                return fs::u8path::empty_path();
             }
 
-            const auto strip_ext = [&extension](const fs::u8path& p)
+            for (const auto& entry : fs::directory_iterator(dir))
             {
-                if (p.extension() == extension)
+                if (entry.is_regular_file())
                 {
-                    return p.stem();
-                }
-                return p.filename();
-            };
-
-            const auto exe_striped = strip_ext(exe);
-            for (const auto& entry : fs::directory_iterator(dir, _ec))
-            {
-                if (auto p = entry.path(); strip_ext(p) == exe_striped)
-                {
-                    return p;
+                    auto filename = entry.path().filename();
+                    if (filename == exe.path() || filename == exe.string() + extension.string())
+                    {
+                        return mamba::fs::u8path(entry.path());
+                    }
                 }
             }
-            return "";  // Not found
+
+            return fs::u8path::empty_path();
         }
 
-        auto which_in_split_impl(
+        fs::u8path which_in_split_impl(
             const fs::u8path& exe,
             std::string_view paths,
             const fs::u8path& extension,
-            char pathsep
-        ) -> fs::u8path
+            char sep
+        )
         {
-            auto elem = std::string_view();
-            auto rest = std::optional<std::string_view>(paths);
-            while (rest.has_value())
+            std::string_view::size_type start = 0;
+            std::string_view::size_type end = 0;
+
+            while ((end = paths.find(sep, start)) != std::string_view::npos)
             {
-                std::tie(elem, rest) = util::split_once(rest.value(), pathsep);
-                if (auto p = which_in_one_impl(exe, elem, extension); !p.empty())
+                auto elem = paths.substr(start, end - start);
+                if (auto p = which_in_one_impl(exe, fs::u8path(elem), extension); !p.empty())
                 {
                     return p;
-                };
+                }
+                start = end + 1;
             }
-            return "";
+
+            if (start < paths.size())
+            {
+                auto elem = paths.substr(start);
+                if (auto p = which_in_one_impl(exe, fs::u8path(elem), extension); !p.empty())
+                {
+                    return p;
+                }
+            }
+
+            return fs::u8path::empty_path();
+        }
+    }
+
+    namespace detail
+    {
+        auto which_in_one(const fs::u8path& exe, const fs::u8path& dir) -> fs::u8path
+        {
+            return which_in_one_impl(exe, dir, exec_extension());
+        }
+
+        auto which_in_split(const fs::u8path& exe, std::string_view paths) -> fs::u8path
+        {
+            return which_in_split_impl(exe, paths, exec_extension(), util::pathsep());
         }
     }
 
@@ -435,18 +453,5 @@ namespace mamba::util
             }
         }
         return which_system(exe);
-    }
-
-    namespace detail
-    {
-        auto which_in_one(const fs::u8path& exe, const fs::u8path& dir) -> fs::u8path
-        {
-            return which_in_one_impl(exe, dir, exec_extension());
-        }
-
-        auto which_in_split(const fs::u8path& exe, std::string_view paths) -> fs::u8path
-        {
-            return which_in_split_impl(exe, paths, exec_extension(), util::pathsep());
-        }
     }
 }

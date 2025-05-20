@@ -47,8 +47,12 @@ extern "C"
 }
 #endif
 
+#include <regex>
+
 #include <nlohmann/json.hpp>
 #include <tl/expected.hpp>
+
+#include <mamba/util/path_manip.hpp>
 
 #include "mamba/core/context.hpp"
 #include "mamba/core/error_handling.hpp"
@@ -117,10 +121,11 @@ namespace mamba
     bool lexists(const fs::u8path& path, std::error_code& ec)
     {
         auto status = fs::symlink_status(path, ec).type();
-        if (status != fs::file_type::none)
+        if (status != std::filesystem::file_type::none)
         {
             ec.clear();
-            return status != fs::file_type::not_found || status == fs::file_type::symlink;
+            return status != std::filesystem::file_type::not_found
+                   || status == std::filesystem::file_type::symlink;
         }
         return false;
     }
@@ -128,7 +133,8 @@ namespace mamba
     bool lexists(const fs::u8path& path)
     {
         auto status = fs::symlink_status(path);
-        return status.type() != fs::file_type::not_found || status.type() == fs::file_type::symlink;
+        return status.type() != std::filesystem::file_type::not_found
+               || status.type() == std::filesystem::file_type::symlink;
     }
 
     std::vector<fs::u8path> filter_dir(const fs::u8path& dir, const std::string& suffix)
@@ -160,7 +166,15 @@ namespace mamba
     // TODO expand variables, ~ and make absolute
     bool paths_equal(const fs::u8path& lhs, const fs::u8path& rhs)
     {
-        return lhs == rhs;
+        // Expand home directory and environment variables
+        auto expand_path = [](const fs::u8path& p)
+        {
+            std::string expanded = util::expand_home(p.string());
+            expanded = ::mamba::util::expand_vars(expanded);
+            return fs::absolute(fs::u8path(expanded));
+        };
+
+        return expand_path(lhs) == expand_path(rhs);
     }
 
     TemporaryDirectory::TemporaryDirectory()
@@ -521,7 +535,7 @@ namespace mamba
         {
             // recursive iterate over all files and delete `.mamba_trash` files
             std::vector<fs::u8path> f_to_rm;
-            for (auto& p : fs::recursive_directory_iterator(prefix))
+            for (auto& p : std::filesystem::recursive_directory_iterator(prefix))
             {
                 if (p.path().extension() == ".mamba_trash")
                 {
@@ -1673,5 +1687,27 @@ namespace mamba
 
         return copy;
     }
-
 }  // namespace mamba
+
+namespace mamba::util
+{
+    std::string expand_vars(const std::string& s)
+    {
+        std::string result = s;
+        std::regex env_var_re(R"(\$(\{\w+\}|\w+))");
+        std::smatch match;
+        auto search_start = result.cbegin();
+        while (std::regex_search(search_start, result.cend(), match, env_var_re))
+        {
+            std::string var = match[1].str();
+            if (var.front() == '{' && var.back() == '}')
+            {
+                var = var.substr(1, var.size() - 2);
+            }
+            const char* val = std::getenv(var.c_str());
+            result.replace(match.position(0), match.length(0), val ? val : "");
+            search_start = result.cbegin() + match.position(0) + (val ? std::strlen(val) : 0);
+        }
+        return result;
+    }
+}

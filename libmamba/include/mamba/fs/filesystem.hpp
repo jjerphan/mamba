@@ -7,67 +7,23 @@
 #ifndef MAMBA_FS_FILESYSTEM_HPP
 #define MAMBA_FS_FILESYSTEM_HPP
 
+#include <concepts>
 #include <filesystem>
 #include <string>
+#include <string_view>
 
 #include <fmt/format.h>
 
-//---- RATIONALE: Why do we wrap standard filesystem here? ----
-// 1. This codebase relies on `std::string` and `const char*` to denote UTF-8 encoded text.
-//    However `std::filesystem::path` constructors cannot assume that `std::string` is in
-//    another encoding than the default one for the platform. This leads runtime issues on some
-//    platforms (mostly Windows) where Unicode paths either lead to exceptions being thrown
-//    by standard filesystem functions or invalid Unicode characters replacing the paths' content.
-//    To work around these issues we need to make sure `std::string` and other characters are
-//    assumed to be UTF-8 and paths are built with that knowledge. (The internal storage is optimal
-//    for the platform so it is not a concern.) In the same way we need paths to be convertible
-//    to UTF-8 when converting them to string.
-//    To achieve this we wrap a `std::filesystem::path` into our type `fs::u8path` so that
-//    conversions always happen correctly in its conversion functions, like an encoding barrier.
-//
-// 2. Once using `fs::u8path`, we cannot use the standard library filesystem algorithms even with
-//    `fs::u8path` implicit conversions without risking ending up with `std::filesystem::path` in
-//    code like this:
-//
-//        fs::u8path prefix = ...;
-//        prefix = rstrip(fs::weakly_canonical(util::expand_user(prefix)).string(), sep);
-//
-//    Here if `fs::weakly_canonical` is just an alias for `std::filesystem::weakly_canonical` it
-//    then returns a `std::filesystem::path` and we then call `.string()` on it. That conversion
-//    assumes that the resulting string should be of the system's encoding (it's unspecified by the
-//    standard) which leads on Windows for example to the resulting `prefix` with invalid characters
-//    which are then rejected by directory creation functions used later.
-//    Another example:
-//
-//    for(const auto& entry : std::filesystem::directory_iterator(some_path))
-//         if (ends_with(entry.path().string(), ".json")) { ...
-//
-//    Here `entry` is a `std::filesystem::directory_entry` therefore `.path()` returns a
-//    `std::filesystem::path` which makes `.string()` return a string with unknown encoding.
-//    Once passed in `ends_with` which takes a `u8path`, we end up with `???.json` because we
-//    assumed in `u8path` constructor that this string would be UTF-8 when it is of unknown
-//    encoding.
-//
-//    This kind of code seems valid but is silently broken. It is very easy to end up in this kind
-//    of situation which makes us consider this situation brittle. Therefore, the only way to
-//    prevent this kind of issue is to make sure every path value passed to and returned by
-//    filesystem functions is first converted to `fs::u8path`, thus giving us guarantees about
-//    encoding of our paths whatever the platform (as long as strings filtered to be UTF-8).
-//
-// 3. Previous versions of this header were using another library `ghc::filesystem` which is an
-//    implementation of the standard filesystem library but with a guarantee that
-//    `std::filesystem::path::string()` will always return UTF-8 encoding and that constructors
-//    taking strings will assume that they are UTF-8. Why did we prefer doing our own wrapping? The
-//    main reason we decided to wrap instead is that we want users of the library to be able to use
-//    the standard filesystem library in conjunction with this library. As `ghc::filesystem` is a
-//    re-implementation of `std::filesystem`, both cannot really be used together (or at least not
-//    without a lot of explicit conversions). With our present wrapping we are completely compatible
-//    with the standard library as we only add a thin encoding conversion layer over its interface
-//    (at least until the standard library provides better options).
-
-
 namespace mamba::fs
 {
+    using std::filesystem::file_status;
+    using std::filesystem::file_time_type;
+    using std::filesystem::perms;
+    using std::filesystem::space_info;
+    using std::filesystem::directory_iterator;
+    using std::filesystem::directory_entry;
+    using std::filesystem::copy_options;
+
     // sentinel argument for indicating the current time to last_write_time
     class now
     {
@@ -93,222 +49,181 @@ namespace mamba::fs
     public:
 
         using value_type = char;
-        using string_type = std::basic_string<value_type>;
-
+        using string_type = std::string;
         u8path() = default;
+        u8path(const u8path&) = default;
+        u8path(u8path&&) = default;
+        u8path& operator=(const u8path&) = default;
+        u8path& operator=(u8path&&) = default;
 
-        // Copy is allowed.
-        u8path(const u8path& other) = default;
-        u8path& operator=(const u8path& other) = default;
-
-        // Move is allowed.
-        u8path(u8path&& other) = default;
-        u8path& operator=(u8path&& other) = default;
-
-        //---- Construction ----
-
-        u8path(const std::filesystem::path& path)
-            : m_path(normalized_separators(path))
+        u8path(const std::string& u8string)
+            : m_path(u8string)
         {
-        }
-
-        u8path& operator=(const std::filesystem::path& path)
-        {
-            m_path = normalized_separators(path);
-            return *this;
-        }
-
-        u8path& operator=(std::filesystem::path&& path)
-        {
-            m_path = normalized_separators(std::move(path));
-            return *this;
         }
 
         u8path(std::string_view u8string)
-            : m_path(from_utf8(u8string))
+            : m_path(u8string)
         {
-        }
-
-        u8path& operator=(std::string_view u8string)
-        {
-            m_path = from_utf8(u8string);
-            return *this;
         }
 
         u8path(const char* u8string)
-            : m_path(from_utf8(u8string))
+            : m_path(u8string)
         {
         }
 
-        u8path& operator=(const char* u8string)
-        {
-            m_path = from_utf8(u8string);
-            return *this;
-        }
-
-        u8path(const std::string& u8string)
-            : m_path(from_utf8(u8string))
+        u8path(const std::filesystem::path& p)
+            : m_path(p)
         {
         }
 
         u8path& operator=(const std::string& u8string)
         {
-            m_path = from_utf8(u8string);
+            m_path = u8string;
             return *this;
         }
 
-        u8path& operator=(std::string&& u8string)
+        u8path& operator=(std::string_view u8string)
         {
-            m_path = from_utf8(std::move(u8string));
+            m_path = u8string;
             return *this;
         }
 
-        //---- Wide character support (Windows usage mostly) - no Unicode conversions.
-
-        u8path(const wchar_t* wstr)
-            : m_path(normalized_separators(wstr))
+        u8path& operator=(const char* u8string)
         {
-        }
-
-        u8path& operator=(const wchar_t* wstr)
-        {
-            m_path = normalized_separators(wstr);
+            m_path = u8string;
             return *this;
         }
 
-        u8path(const std::wstring& wstr)
-            : m_path(normalized_separators(wstr))
+        u8path& operator=(const std::filesystem::path& p)
         {
-        }
-
-        u8path& operator=(const std::wstring& wstr)
-        {
-            m_path = normalized_separators(wstr);
+            m_path = p;
             return *this;
         }
-
-        u8path& operator=(std::wstring&& wstr)
-        {
-            m_path = normalized_separators(std::move(wstr));
-            return *this;
-        }
-
-        //---- Append ----
 
         u8path operator/(const u8path& p) const
         {
-            return m_path / p.m_path;
+            return u8path(m_path / p.m_path);
         }
 
         u8path operator/(const std::filesystem::path& p) const
         {
-            return m_path / normalized_separators(p);
-        }
-
-        u8path operator/(std::string_view str) const
-        {
-            return m_path / from_utf8(str);
-        }
-
-        u8path operator/(std::wstring_view wstr) const
-        {
-            return m_path / normalized_separators(wstr);
+            return u8path(m_path / p);
         }
 
         u8path operator/(const std::string& str) const
         {
-            return m_path / from_utf8(str);
+            return u8path(m_path / str);
         }
 
-        u8path operator/(const std::wstring& wstr) const
+        u8path operator/(std::string_view str) const
         {
-            return m_path / normalized_separators(wstr);
+            return u8path(m_path / str);
         }
 
         u8path operator/(const char* str) const
         {
-            return m_path / from_utf8(str);
+            return u8path(m_path / str);
         }
 
-        u8path operator/(const wchar_t* wstr) const
+        u8path& operator+=(const std::string& to_append)
         {
-            return m_path / normalized_separators(wstr);
-        }
-
-        template <typename T>
-        u8path& operator/=(T&& some_string)
-        {
-            *this = *this / std::forward<T>(some_string);
-            return *this;
-        }
-
-        u8path& operator+=(const u8path& to_append)
-        {
-            m_path += to_append.m_path;
-            return *this;
-        }
-
-        u8path& operator+=(const std::filesystem::path& to_append)
-        {
-            m_path += normalized_separators(to_append);
+            m_path += to_append;
             return *this;
         }
 
         u8path& operator+=(std::string_view to_append)
         {
-            m_path = from_utf8(this->string().append(to_append));
-            return *this;
-        }
-
-        u8path& operator+=(std::wstring_view to_append)
-        {
-            m_path += normalized_separators(to_append);
+            m_path += to_append;
             return *this;
         }
 
         u8path& operator+=(const char* to_append)
         {
-            m_path = from_utf8(this->string().append(to_append));
-            return *this;
-        }
-
-        u8path& operator+=(const wchar_t* to_append)
-        {
-            m_path += normalized_separators(to_append);
-            return *this;
-        }
-
-        u8path& operator+=(const std::string& to_append)
-        {
-            m_path = from_utf8(this->string().append(to_append));
-            return *this;
-        }
-
-        u8path& operator+=(const std::wstring& to_append)
-        {
-            m_path += normalized_separators(to_append);
+            m_path += to_append;
             return *this;
         }
 
         u8path& operator+=(char to_append)
-        {
-            m_path = from_utf8(this->string().append(1, to_append));
-            return *this;
-        }
-
-        u8path& operator+=(wchar_t to_append)
         {
             m_path += to_append;
             m_path = normalized_separators(std::move(m_path));
             return *this;
         }
 
-        //---- Conversions ----
+        bool empty() const noexcept
+        {
+            return m_path.empty();
+        }
 
-        // Returns a UTF-8 string with normalized separators.
+        static u8path empty_path()
+        {
+            return u8path();
+        }
+
+        const std::filesystem::path& path() const
+        {
+            return m_path;
+        }
+
+        std::filesystem::path& path()
+        {
+            return m_path;
+        }
+
         std::string string() const
         {
-            return to_utf8(m_path, { /*normalize_sep=*/true });
+            return m_path.string();
+        }
+
+        // Add wrappers for std::filesystem::path methods
+        u8path stem() const
+        {
+            return u8path(m_path.stem());
+        }
+
+        u8path parent_path() const
+        {
+            return u8path(m_path.parent_path());
+        }
+
+        u8path root_name() const
+        {
+            return u8path(m_path.root_name());
+        }
+
+        u8path root_directory() const
+        {
+            return u8path(m_path.root_directory());
+        }
+
+        u8path root_path() const
+        {
+            return u8path(m_path.root_path());
+        }
+
+        u8path filename() const
+        {
+            return u8path(m_path.filename());
+        }
+
+        u8path extension() const
+        {
+            return u8path(m_path.extension());
+        }
+
+        u8path lexically_normal() const
+        {
+            return u8path(m_path.lexically_normal());
+        }
+
+        u8path lexically_relative(const u8path& base) const
+        {
+            return u8path(m_path.lexically_relative(base.m_path));
+        }
+
+        u8path lexically_proximate(const u8path& base) const
+        {
+            return u8path(m_path.lexically_proximate(base.m_path));
         }
 
         // Returns a default encoded string.
@@ -351,58 +266,6 @@ namespace mamba::fs
         const std::filesystem::path& std_path() const noexcept
         {
             return m_path;
-        }
-
-        //---- Parts ----
-
-        u8path stem() const
-        {
-            return m_path.stem();
-        }
-
-        u8path parent_path() const
-        {
-            return m_path.parent_path();
-        }
-
-        u8path root_name() const
-        {
-            return m_path.root_name();
-        }
-
-        u8path root_directory() const
-        {
-            return m_path.root_directory();
-        }
-
-        u8path root_path() const
-        {
-            return m_path.root_path();
-        }
-
-        u8path filename() const
-        {
-            return m_path.filename();
-        }
-
-        u8path extension() const
-        {
-            return m_path.extension();
-        }
-
-        u8path lexically_normal() const
-        {
-            return m_path.lexically_normal();
-        }
-
-        u8path lexically_relative(const u8path& base) const
-        {
-            return m_path.lexically_relative(base);
-        }
-
-        u8path lexically_proximate(const u8path& base) const
-        {
-            return m_path.lexically_proximate(base);
         }
 
         //---- Modifiers ----
@@ -462,82 +325,7 @@ namespace mamba::fs
             return left.m_path >= right.m_path;
         }
 
-        friend bool operator==(const u8path& left, const std::filesystem::path& right) noexcept
-        {
-            return left.m_path == right;
-        }
-
-        friend bool operator!=(const u8path& left, const std::filesystem::path& right) noexcept
-        {
-            return left.m_path != right;
-        }
-
-        friend bool operator<(const u8path& left, const std::filesystem::path& right) noexcept
-        {
-            return left.m_path < right;
-        }
-
-        friend bool operator<=(const u8path& left, const std::filesystem::path& right) noexcept
-        {
-            return left.m_path <= right;
-        }
-
-        friend bool operator>(const u8path& left, const std::filesystem::path& right) noexcept
-        {
-            return left.m_path > right;
-        }
-
-        friend bool operator>=(const u8path& left, const std::filesystem::path& right) noexcept
-        {
-            return left.m_path >= right;
-        }
-
-        friend bool operator==(const u8path& left, const std::string& right) noexcept
-        {
-            return left.m_path == from_utf8(right);
-        }
-
-        friend bool operator!=(const u8path& left, const std::string& right) noexcept
-        {
-            return left.m_path != from_utf8(right);
-        }
-
-        friend bool operator==(const u8path& left, const char* right) noexcept
-        {
-            return left.m_path == from_utf8(right);
-        }
-
-        friend bool operator!=(const u8path& left, const char* right) noexcept
-        {
-            return left.m_path != from_utf8(right);
-        }
-
-        friend bool operator==(const u8path& left, const std::wstring& right) noexcept
-        {
-            return left.m_path == right;
-        }
-
-        friend bool operator!=(const u8path& left, const std::wstring& right) noexcept
-        {
-            return left.m_path != right;
-        }
-
-        friend bool operator==(const u8path& left, const wchar_t* right) noexcept
-        {
-            return left.m_path == right;
-        }
-
-        friend bool operator!=(const u8path& left, const wchar_t* right) noexcept
-        {
-            return left.m_path != right;
-        }
-
         //---- State ----
-
-        bool empty() const noexcept
-        {
-            return m_path.empty();
-        }
 
         bool is_absolute() const
         {
@@ -565,7 +353,6 @@ namespace mamba::fs
         }
 
         bool has_relative_path() const
-
         {
             return m_path.has_relative_path();
         }
@@ -603,23 +390,13 @@ namespace mamba::fs
         }
 
         // Reads stream assuming UTF-8 encoding.
-        template <typename InputStream>
-        friend InputStream& operator>>(InputStream& in, u8path& path)
+        template <typename InStream>
+        friend InStream& operator>>(InStream& in, u8path& path)
         {
-            std::string raw_input;
-            in >> std::quoted(raw_input);
-            path.m_path = from_utf8(raw_input);
+            std::string str;
+            in >> std::quoted(str);
+            path = str;
             return in;
-        }
-
-        friend std::size_t hash_value(const u8path& p) noexcept
-        {
-            return hash_value(p.m_path);
-        }
-
-        friend void swap(u8path& left, u8path& right) noexcept
-        {
-            swap(left.m_path, right.m_path);
         }
 
     private:
@@ -627,255 +404,10 @@ namespace mamba::fs
         std::filesystem::path m_path;
     };
 
-    class directory_entry : private std::filesystem::directory_entry
-    {
-    public:
+    // Remove custom directory_entry class and use std::filesystem::directory_entry directly
+    using directory_entry = std::filesystem::directory_entry;
 
-        using std::filesystem::directory_entry::exists;
-        using std::filesystem::directory_entry::file_size;
-        using std::filesystem::directory_entry::hard_link_count;
-        using std::filesystem::directory_entry::is_block_file;
-        using std::filesystem::directory_entry::is_character_file;
-        using std::filesystem::directory_entry::is_directory;
-        using std::filesystem::directory_entry::is_fifo;
-        using std::filesystem::directory_entry::is_other;
-        using std::filesystem::directory_entry::is_regular_file;
-        using std::filesystem::directory_entry::is_socket;
-        using std::filesystem::directory_entry::is_symlink;
-        using std::filesystem::directory_entry::last_write_time;
-        using std::filesystem::directory_entry::status;
-        using std::filesystem::directory_entry::symlink_status;
-
-        directory_entry() = default;
-        directory_entry(const directory_entry&) = default;
-        directory_entry(directory_entry&&) noexcept = default;
-        directory_entry& operator=(const directory_entry&) = default;
-        directory_entry& operator=(directory_entry&&) noexcept = default;
-
-        template <typename... OtherArgs>
-        explicit directory_entry(const u8path& path, OtherArgs&&... args)
-            : std::filesystem::directory_entry(path.std_path(), std::forward<OtherArgs>(args)...)
-        {
-        }
-
-        directory_entry(const std::filesystem::directory_entry& other)
-            : std::filesystem::directory_entry(other)
-        {
-        }
-
-        directory_entry(std::filesystem::directory_entry&& other)
-            : std::filesystem::directory_entry(std::move(other))
-        {
-        }
-
-        directory_entry& operator=(const std::filesystem::directory_entry& other)
-        {
-            std::filesystem::directory_entry::operator=(other);
-            return *this;
-        }
-
-        directory_entry& operator=(std::filesystem::directory_entry&& other) noexcept
-        {
-            std::filesystem::directory_entry::operator=(std::move(other));
-            return *this;
-        }
-
-        bool operator==(const directory_entry& other) const noexcept
-        {
-            return std::filesystem::directory_entry::operator==(other);
-        }
-
-        bool operator!=(const directory_entry& other) const noexcept
-        {
-            return std::filesystem::directory_entry::operator!=(other);
-        }
-
-        u8path path() const
-        {
-            return std::filesystem::directory_entry::path();
-        }
-
-        operator u8path() const noexcept
-        {
-            return std::filesystem::directory_entry::path();
-        }
-
-        template <typename... OtherArgs>
-        void replace(const u8path p, OtherArgs&&... args)
-        {
-            std::filesystem::directory_entry::replace_filename(p, std::forward<OtherArgs>(args)...);
-        }
-    };
-
-    static_assert(std::is_same_v<decltype(std::declval<directory_entry>().path()), u8path>);
-
-    class directory_iterator : private std::filesystem::directory_iterator
-    {
-    public:
-
-        using iterator_category = std::input_iterator_tag;
-        using value_type = directory_entry;
-        using difference_type = std::ptrdiff_t;
-        using pointer = const directory_entry*;
-        using reference = const directory_entry&;
-
-        directory_iterator() = default;
-        directory_iterator(const directory_iterator&) = default;
-        directory_iterator(directory_iterator&&) noexcept = default;
-        directory_iterator& operator=(const directory_iterator&) = default;
-        directory_iterator& operator=(directory_iterator&&) noexcept = default;
-
-        template <typename... OtherArgs>
-        explicit directory_iterator(const u8path& path, OtherArgs&&... args)
-            : std::filesystem::directory_iterator(path.std_path(), std::forward<OtherArgs>(args)...)
-        {
-        }
-
-        const directory_entry& operator*() const
-        {
-            current_entry = std::filesystem::directory_iterator::operator*();
-            return current_entry;
-        }
-
-        const directory_entry* operator->() const
-        {
-            return &(**this);
-        }
-
-        directory_iterator& operator++()
-        {
-            std::filesystem::directory_iterator::operator++();
-            return *this;
-        }
-
-        directory_iterator& increment(std::error_code& ec)
-        {
-            std::filesystem::directory_iterator::increment(ec);
-            return *this;
-        }
-
-        bool operator==(const directory_iterator& other) const noexcept
-        {
-            return static_cast<const std::filesystem::directory_iterator&>(*this) == other;
-        }
-
-        bool operator!=(const directory_iterator& other) const noexcept
-        {
-            return static_cast<const std::filesystem::directory_iterator&>(*this) != other;
-        }
-
-    private:
-
-        mutable directory_entry current_entry;
-    };
-
-    static_assert(std::is_same_v<std::decay_t<decltype(*std::declval<directory_iterator>())>, directory_entry>);
-
-    inline directory_iterator begin(directory_iterator iter) noexcept
-    {
-        return iter;
-    }
-
-    inline directory_iterator end(directory_iterator) noexcept
-    {
-        return {};
-    }
-
-    class recursive_directory_iterator : private std::filesystem::recursive_directory_iterator
-    {
-    public:
-
-        using iterator_category = std::input_iterator_tag;
-        using value_type = directory_entry;
-        using difference_type = std::ptrdiff_t;
-        using pointer = const directory_entry*;
-        using reference = const directory_entry&;
-
-        using std::filesystem::recursive_directory_iterator::depth;
-        using std::filesystem::recursive_directory_iterator::disable_recursion_pending;
-        using std::filesystem::recursive_directory_iterator::options;
-        using std::filesystem::recursive_directory_iterator::pop;
-        using std::filesystem::recursive_directory_iterator::recursion_pending;
-
-        recursive_directory_iterator() = default;
-        recursive_directory_iterator(const recursive_directory_iterator&) = default;
-        recursive_directory_iterator(recursive_directory_iterator&&) noexcept = default;
-        recursive_directory_iterator& operator=(const recursive_directory_iterator&) = default;
-        recursive_directory_iterator& operator=(recursive_directory_iterator&&) noexcept = default;
-
-        template <typename... OtherArgs>
-        explicit recursive_directory_iterator(const u8path& path, OtherArgs&&... args)
-            : std::filesystem::recursive_directory_iterator(
-                  path.std_path(),
-                  std::forward<OtherArgs>(args)...
-              )
-        {
-        }
-
-        const directory_entry& operator*() const noexcept
-        {
-            current_entry = std::filesystem::recursive_directory_iterator::operator*();
-            return current_entry;
-        }
-
-        const directory_entry* operator->() const noexcept
-        {
-            return &(**this);
-        }
-
-        recursive_directory_iterator& operator++()
-        {
-            std::filesystem::recursive_directory_iterator::operator++();
-            return *this;
-        }
-
-        recursive_directory_iterator& increment(std::error_code& ec)
-        {
-            std::filesystem::recursive_directory_iterator::increment(ec);
-            return *this;
-        }
-
-        bool operator==(const recursive_directory_iterator& other) const noexcept
-        {
-            return static_cast<const std::filesystem::recursive_directory_iterator&>(*this) == other;
-        }
-
-        bool operator!=(const recursive_directory_iterator& other) const noexcept
-        {
-            return static_cast<const std::filesystem::recursive_directory_iterator&>(*this) != other;
-        }
-
-    private:
-
-        mutable directory_entry current_entry;
-    };
-
-    static_assert(std::is_same_v<std::decay_t<decltype(*std::declval<directory_iterator>())>, directory_entry>);
-
-    inline recursive_directory_iterator begin(recursive_directory_iterator iter) noexcept
-    {
-        return iter;
-    }
-
-    inline recursive_directory_iterator end(recursive_directory_iterator) noexcept
-    {
-        return {};
-    }
-
-    //---- Standard Filesystem element we reuse here -----
-
-    using std::filesystem::copy_options;
-    using std::filesystem::directory_options;
-    using std::filesystem::file_status;
-    using std::filesystem::file_time_type;
-    using std::filesystem::file_type;
-    using std::filesystem::filesystem_error;
-    using std::filesystem::perm_options;
-    using std::filesystem::perms;
-    using std::filesystem::space_info;
-
-    //----- Wrapped versions of std::filesystem algorithm that returns a `u8path` instead of
-    //`std::filesystem::path`
+    //---- Filesystem Operations ----
 
     // path absolute(const path& p);
     // path absolute(const path& p, error_code& ec);
@@ -975,13 +507,13 @@ namespace mamba::fs
     // path current_path();
     inline u8path current_path()
     {
-        return std::filesystem::current_path();
+        return u8path(std::filesystem::current_path());
     }
 
     // path current_path(error_code& ec);
     inline u8path current_path(std::error_code& ec)
     {
-        return std::filesystem::current_path(ec);
+        return u8path(std::filesystem::current_path(ec));
     }
 
     // void current_path(const path& p);
@@ -1011,7 +543,7 @@ namespace mamba::fs
     template <typename... OtherArgs>
     bool exists(const u8path& path, OtherArgs&&... args)
     {
-        return std::filesystem::exists(path, std::forward<OtherArgs>(args)...);
+        return std::filesystem::exists(path.path(), std::forward<OtherArgs>(args)...);
     }
 
     // uintmax_t file_size(const path& p);
@@ -1041,7 +573,7 @@ namespace mamba::fs
     template <typename... OtherArgs>
     bool is_block_file(const u8path& path, OtherArgs&&... args)
     {
-        return std::filesystem::is_block_file(path, std::forward<OtherArgs>(args)...);
+        return std::filesystem::is_block_file(path.path(), std::forward<OtherArgs>(args)...);
     }
 
     // bool is_character_file(file_status s) noexcept;
@@ -1055,7 +587,7 @@ namespace mamba::fs
     template <typename... OtherArgs>
     bool is_character_file(const u8path& path, OtherArgs&&... args)
     {
-        return std::filesystem::is_character_file(path, std::forward<OtherArgs>(args)...);
+        return std::filesystem::is_character_file(path.path(), std::forward<OtherArgs>(args)...);
     }
 
     // bool is_directory(file_status s) noexcept;
@@ -1069,11 +601,11 @@ namespace mamba::fs
     template <typename... OtherArgs>
     bool is_directory(const u8path& path, OtherArgs&&... args)
     {
-        return std::filesystem::is_directory(path, std::forward<OtherArgs>(args)...);
+        return std::filesystem::is_directory(path.path(), std::forward<OtherArgs>(args)...);
     }
 
     // bool is_empty(const path& p);
-    // bool is_empty(const path& p, error_code& ec);
+    // bool is_empty(const path& p, error_code& ec) noexcept;
     template <typename... OtherArgs>
     bool is_empty(const u8path& path, OtherArgs&&... args)
     {
@@ -1091,7 +623,7 @@ namespace mamba::fs
     template <typename... OtherArgs>
     bool is_fifo(const u8path& path, OtherArgs&&... args)
     {
-        return std::filesystem::is_fifo(path, std::forward<OtherArgs>(args)...);
+        return std::filesystem::is_fifo(path.path(), std::forward<OtherArgs>(args)...);
     }
 
     // bool is_other(file_status s) noexcept;
@@ -1105,7 +637,7 @@ namespace mamba::fs
     template <typename... OtherArgs>
     bool is_other(const u8path& path, OtherArgs&&... args)
     {
-        return std::filesystem::is_other(path, std::forward<OtherArgs>(args)...);
+        return std::filesystem::is_other(path.path(), std::forward<OtherArgs>(args)...);
     }
 
     // bool is_regular_file(file_status s) noexcept;
@@ -1119,7 +651,7 @@ namespace mamba::fs
     template <typename... OtherArgs>
     bool is_regular_file(const u8path& path, OtherArgs&&... args)
     {
-        return std::filesystem::is_regular_file(path, std::forward<OtherArgs>(args)...);
+        return std::filesystem::is_regular_file(path.path(), std::forward<OtherArgs>(args)...);
     }
 
     // bool is_socket(file_status s) noexcept;
@@ -1133,7 +665,7 @@ namespace mamba::fs
     template <typename... OtherArgs>
     bool is_socket(const u8path& path, OtherArgs&&... args)
     {
-        return std::filesystem::is_socket(path, std::forward<OtherArgs>(args)...);
+        return std::filesystem::is_socket(path.path(), std::forward<OtherArgs>(args)...);
     }
 
     // bool is_symlink(file_status s) noexcept;
@@ -1147,7 +679,7 @@ namespace mamba::fs
     template <typename... OtherArgs>
     bool is_symlink(const u8path& path, OtherArgs&&... args)
     {
-        return std::filesystem::is_symlink(path, std::forward<OtherArgs>(args)...);
+        return std::filesystem::is_symlink(path.path(), std::forward<OtherArgs>(args)...);
     }
 
     // file_time_type last_write_time(const path& p);
@@ -1155,38 +687,27 @@ namespace mamba::fs
     template <typename... OtherArgs>
     file_time_type last_write_time(const u8path& path, OtherArgs&&... args)
     {
-        return std::filesystem::last_write_time(path, std::forward<OtherArgs>(args)...);
+        return std::filesystem::last_write_time(path.path(), std::forward<OtherArgs>(args)...);
     }
 
-    // void last_write_time(const path& p, now _, error_code& ec) noexcept;
+    // Overload for last_write_time with fs::now sentinel
     void last_write_time(const u8path& path, now, std::error_code& ec) noexcept;
-
-    // void last_write_time(const path& p, now _);
-    inline void last_write_time(const u8path& path, now sentinel)
-    {
-        std::error_code ec;
-        last_write_time(path, sentinel, ec);
-        if (ec)
-        {
-            throw filesystem_error("last_write_time", path, ec);
-        }
-    }
 
     // void last_write_time(const path& p, file_time_type new_time);
     // void last_write_time(const path& p, file_time_type new_time, error_code& ec) noexcept;
     template <typename... OtherArgs>
     void last_write_time(const u8path& path, file_time_type new_time, OtherArgs&&... args)
     {
-        return std::filesystem::last_write_time(path, new_time, std::forward<OtherArgs>(args)...);
+        std::filesystem::last_write_time(path.path(), new_time, std::forward<OtherArgs>(args)...);
     }
 
     // void permissions(const path& p, perms prms, perm_options opts = perm_options::replace);
     // void permissions(const path& p, perms prms, error_code& ec) noexcept;
-    // void permissions(const path& p, perms prms, perm_options opts, error_code& ec);
+    // void permissions(const path& p, perms prms, perm_options opts, error_code& ec) noexcept;
     template <typename... OtherArgs>
-    void permissions(const u8path& path, OtherArgs&&... args)
+    void permissions(const u8path& path, perms prms, OtherArgs&&... args)
     {
-        std::filesystem::permissions(path, std::forward<OtherArgs>(args)...);
+        std::filesystem::permissions(path.path(), prms, std::forward<OtherArgs>(args)...);
     }
 
     // path proximate(const path& p, error_code& ec);
@@ -1232,59 +753,15 @@ namespace mamba::fs
     template <typename... OtherArgs>
     bool remove(const u8path& path, OtherArgs&&... args)
     {
-#if defined(WIN32) && _MSC_VER < 1930  // Workaround https://github.com/microsoft/STL/issues/1511
-        std::error_code errc;
-        const auto file_status = std::filesystem::status(path, errc);
-        if (!errc
-            && (file_status.permissions() & std::filesystem::perms::owner_read)
-                   != std::filesystem::perms::none
-            && (file_status.permissions() & std::filesystem::perms::owner_write)
-                   == std::filesystem::perms::none)
-        {
-            // The target file is read-only, we need to change that to fix the
-            // VS bug.
-            fs::permissions(path, fs::perms::owner_write, fs::perm_options::add);
-        }
-#endif
         return std::filesystem::remove(path, std::forward<OtherArgs>(args)...);
     }
 
     // uintmax_t remove_all(const path& p);
-    // uintmax_t remove_all(const path& p, error_code& ec);
+    // uintmax_t remove_all(const path& p, error_code& ec) noexcept;
     template <typename... OtherArgs>
     uintmax_t remove_all(const u8path& path, OtherArgs&&... args)
     {
-#if defined(WIN32) && _MSC_VER < 1930  // Workaround https://github.com/microsoft/STL/issues/1511
-        if (!fs::exists(path))
-        {
-            return 0;
-        }
-
-        uintmax_t counter = 0;
-        for (const auto& entry : fs::recursive_directory_iterator(path, args...))
-        {
-            if (fs::is_directory(entry.path()))
-            {  // Skip directories, we'll delete them later.
-                continue;
-            }
-
-            if (fs::remove(entry.path(), args...))
-            {
-                ++counter;
-            }
-            else
-            {
-                break;
-            }
-        }
-
-        // Now remove all the directories resting.
-        counter += std::filesystem::remove_all(path, args...);
-
-        return counter;
-#else
         return std::filesystem::remove_all(path, std::forward<OtherArgs>(args)...);
-#endif
     }
 
     // void rename(const path& from, const path& to);
@@ -1308,7 +785,7 @@ namespace mamba::fs
     template <typename... OtherArgs>
     space_info space(const u8path& path, OtherArgs&&... args)
     {
-        return std::filesystem::space(path, std::forward<OtherArgs>(args)...);
+        return std::filesystem::space(path.path(), std::forward<OtherArgs>(args)...);
     }
 
     // file_status status(const path& p);
@@ -1316,7 +793,7 @@ namespace mamba::fs
     template <typename... OtherArgs>
     file_status status(const u8path& path, OtherArgs&&... args)
     {
-        return std::filesystem::status(path, std::forward<OtherArgs>(args)...);
+        return std::filesystem::status(path.path(), std::forward<OtherArgs>(args)...);
     }
 
     // bool status_known(file_status s) noexcept;
@@ -1330,7 +807,7 @@ namespace mamba::fs
     template <typename... OtherArgs>
     file_status symlink_status(const u8path& path, OtherArgs&&... args)
     {
-        return std::filesystem::symlink_status(path, std::forward<OtherArgs>(args)...);
+        return std::filesystem::symlink_status(path.path(), std::forward<OtherArgs>(args)...);
     }
 
     // path temp_directory_path();
@@ -1349,36 +826,31 @@ namespace mamba::fs
         return std::filesystem::weakly_canonical(path, std::forward<OtherArgs>(args)...);
     }
 
+}  // namespace mamba::fs
+
+namespace fmt
+{
+    template <>
+    struct formatter<mamba::fs::u8path> : formatter<std::string>
+    {
+        template <typename FormatContext>
+        auto format(const mamba::fs::u8path& p, FormatContext& ctx) const
+        {
+            return formatter<std::string>::format(p.string(), ctx);
+        }
+    };
 }
 
-template <>
-struct std::hash<::mamba::fs::u8path>
+namespace std
 {
-    std::size_t operator()(const ::mamba::fs::u8path& path) const noexcept
+    template <>
+    struct hash<mamba::fs::u8path>
     {
-        return std::filesystem::hash_value(path.std_path()
-        );  // TODO: once we stop using gcc < 12 we can properly use
-            // std::hash<std::filesystem::path>{}(path.std_path());
-    }
-};
-
-template <>
-struct fmt::formatter<::mamba::fs::u8path>
-{
-    constexpr auto parse(format_parse_context& ctx) -> decltype(ctx.begin())
-    {
-        // make sure that range is empty
-        if (ctx.begin() != ctx.end() && *ctx.begin() != '}')
+        std::size_t operator()(const mamba::fs::u8path& p) const noexcept
         {
-            throw format_error("invalid format");
+            return std::hash<std::string>{}(p.string());
         }
-        return ctx.begin();
-    }
+    };
+}
 
-    template <class FormatContext>
-    auto format(const ::mamba::fs::u8path& path, FormatContext& ctx) const
-    {
-        return fmt::format_to(ctx.out(), "'{}'", path.string());
-    }
-};
 #endif

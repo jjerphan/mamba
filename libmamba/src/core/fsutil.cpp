@@ -58,7 +58,8 @@ namespace mamba::path
             path = util::expand_home(path.string());
             if (lexists(path))
             {
-                fs::last_write_time(path, fs::now());
+                std::error_code ec;
+                fs::last_write_time(path, fs::now(), ec);
                 return true;
             }
             else
@@ -85,7 +86,7 @@ namespace mamba::path
 
                 if (outfile.fail())
                 {
-                    throw fs::filesystem_error(
+                    throw std::filesystem::filesystem_error(
                         "File creation failed",
                         std::make_error_code(std::errc::permission_denied)
                     );
@@ -112,7 +113,7 @@ namespace mamba::path
         std::error_code ec;
         const auto status = fs::status(path_to_write_in, ec);
 
-        const bool should_be_writable = !ec && status.type() != fs::file_type::not_found
+        const bool should_be_writable = !ec && status.type() != std::filesystem::file_type::not_found
                                         && (status.permissions() & writable_flags) != fs::perms::none;
 
         // If it should not be writable, stop there.

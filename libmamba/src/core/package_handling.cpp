@@ -318,10 +318,10 @@ namespace mamba
         std::vector<std::pair<int, fs::u8path>> files;
         if (ca != compression_algorithm::zip)
         {
-            for (auto& dir_entry : fs::recursive_directory_iterator("."))
+            for (auto& dir_entry : std::filesystem::recursive_directory_iterator("."))
             {
-                auto clean_path = dir_entry.path().lexically_relative("./");
-                files.push_back({ order(clean_path), clean_path });
+                auto clean_path = fs::u8path(dir_entry.path());
+                files.push_back(std::make_pair(order(clean_path), clean_path));
             }
         }
         else
