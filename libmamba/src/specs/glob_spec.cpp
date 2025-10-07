@@ -43,7 +43,7 @@ namespace mamba::specs
 }
 
 auto
-fmt::formatter<mamba::specs::GlobSpec>::format(const ::mamba::specs::GlobSpec& spec, format_context& ctx) const
+std::formatter<mamba::specs::GlobSpec>::format(const ::mamba::specs::GlobSpec& spec, format_context& ctx) const
     -> format_context::iterator
 {
     return fmt::format_to(ctx.out(), "{}", spec.to_string());

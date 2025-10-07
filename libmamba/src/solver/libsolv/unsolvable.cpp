@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-#include <fmt/ranges.h>
+#include <mamba/util/fmt_compat.hpp>
 #include <solv/problems.h>
 #include <solv/solver.h>
 

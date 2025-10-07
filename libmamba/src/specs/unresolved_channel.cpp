@@ -12,8 +12,7 @@
 #include <tuple>
 #include <utility>
 
-#include <fmt/format.h>
-#include <fmt/ranges.h>
+#include <mamba/util/fmt_compat.hpp>
 
 #include "mamba/fs/filesystem.hpp"
 #include "mamba/specs/archive.hpp"
@@ -247,7 +246,7 @@ namespace mamba::specs
 }
 
 auto
-fmt::formatter<mamba::specs::UnresolvedChannel>::format(const UnresolvedChannel& uc, format_context& ctx) const
+std::formatter<mamba::specs::UnresolvedChannel>::format(const UnresolvedChannel& uc, format_context& ctx) const
     -> format_context::iterator
 {
     auto out = fmt::format_to(ctx.out(), "{}", uc.location());

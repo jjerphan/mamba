@@ -4,8 +4,7 @@
 //
 // The full license is in the file LICENSE, distributed with this software.
 
-#ifndef MAMBA_CORE_PROGRESS_BAR_IMPL_HPP
-#define MAMBA_CORE_PROGRESS_BAR_IMPL_HPP
+#pragma once
 
 #include <atomic>
 #include <iosfwd>
@@ -15,7 +14,7 @@
 #include <string_view>
 #include <vector>
 
-#include <fmt/color.h>
+#include <mamba/util/fmt_compat.hpp>
 #include <spdlog/spdlog.h>
 
 #include "mamba/core/context.hpp"
@@ -443,5 +442,3 @@ namespace mamba
         void print(std::ostream& stream, std::size_t width = 0, bool with_endl = true) override;
     };
 }  // namespace mamba
-
-#endif

@@ -11,7 +11,7 @@
 #include <mutex>
 #include <stdexcept>
 
-#include <fmt/format.h>
+#include <mamba/util/fmt_compat.hpp>
 #include <Shlobj.h>
 #include <Windows.h>
 
@@ -212,7 +212,7 @@ namespace mamba::util
 #include <stdexcept>
 #include <vector>
 
-#include <fmt/format.h>
+#include <mamba/util/fmt_compat.hpp>
 #include <pwd.h>
 #include <unistd.h>
 

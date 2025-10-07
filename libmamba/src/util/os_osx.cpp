@@ -6,7 +6,7 @@
 
 #include <array>
 
-#include <fmt/format.h>
+#include <mamba/util/fmt_compat.hpp>
 #include <reproc++/run.hpp>
 
 #include "mamba/util/os_osx.hpp"

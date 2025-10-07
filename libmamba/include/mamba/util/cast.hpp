@@ -12,7 +12,7 @@
 #include <type_traits>
 #include <utility>
 
-#include <fmt/format.h>
+#include <mamba/util/fmt_compat.hpp>
 
 namespace mamba::util
 {

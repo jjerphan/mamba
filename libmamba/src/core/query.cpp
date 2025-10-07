@@ -10,11 +10,8 @@
 #include <stack>
 #include <unordered_set>
 
-#include <fmt/chrono.h>
-#include <fmt/color.h>
-#include <fmt/format.h>
-#include <fmt/ostream.h>
-#include <fmt/ranges.h>
+#include <mamba/util/fmt_compat.hpp>
+#include <mamba/util/fmt_compat.hpp>
 
 #include "mamba/core/context.hpp"
 #include "mamba/core/output.hpp"
@@ -45,7 +42,7 @@ namespace mamba
         {
             return QueryType::WhoNeeds;
         }
-        throw std::invalid_argument(fmt::format("Invalid enum name \"{}\"", name));
+        throw std::invalid_argument(std::format("Invalid enum name \"{}\"", name));
     }
 
     /**************************
@@ -56,7 +53,7 @@ namespace mamba
     {
         auto get_package_repr(const specs::PackageInfo& pkg) -> std::string
         {
-            return pkg.version.empty() ? pkg.name : fmt::format("{}[{}]", pkg.name, pkg.version);
+            return pkg.version.empty() ? pkg.name : std::format("{}[{}]", pkg.name, pkg.version);
         }
 
         struct PkgInfoCmp
@@ -233,11 +230,14 @@ namespace mamba
             );
         }
 
-        return {
-            QueryType::Search,
-            fmt::format("{}", fmt::join(queries, " ")),  // Yes this is disgusting
-            std::move(g),
-        };
+        // Join queries with spaces
+        std::string joined;
+        for (size_t i = 0; i < queries.size(); ++i)
+        {
+            if (i != 0) joined += ' ';
+            joined += queries[i];
+        }
+        return { QueryType::Search, std::move(joined), std::move(g) };
     }
 
     auto Query::whoneeds(Database& database, std::string query, bool tree) -> QueryResult
@@ -299,35 +299,52 @@ namespace mamba
         auto print_metadata(std::ostream& out, const specs::PackageInfo& pkg)
         {
             static constexpr const char* fmtstring = " {:<15} {}\n";
-            fmt::print(out, fmtstring, "Name", pkg.name);
-            fmt::print(out, fmtstring, "Version", pkg.version);
-            fmt::print(out, fmtstring, "Build", pkg.build_string);
-            fmt::print(out, " {:<15} {} kB\n", "Size", pkg.size / 1000);
-            fmt::print(out, fmtstring, "License", pkg.license);
-            fmt::print(out, fmtstring, "Subdir", pkg.platform);
-            fmt::print(out, fmtstring, "File Name", pkg.filename);
+            out << std::vformat(fmtstring, std::make_format_args("Name", pkg.name));
+            out << std::vformat(fmtstring, std::make_format_args("Version", pkg.version));
+            out << std::vformat(fmtstring, std::make_format_args("Build", pkg.build_string));
+            out << std::vformat(" {:<15} {} kB\n", std::make_format_args("Size", pkg.size / 1000));
+            out << std::vformat(fmtstring, std::make_format_args("License", pkg.license));
+            out << std::vformat(fmtstring, std::make_format_args("Subdir", pkg.platform));
+            out << std::vformat(fmtstring, std::make_format_args("File Name", pkg.filename));
 
             using CondaURL = typename specs::CondaURL;
             auto url = CondaURL::parse(pkg.package_url)
                            .or_else([](specs::ParseError&& err) { throw std::move(err); })
                            .value();
-            fmt::print(
-                out,
+            out << std::vformat(
                 " {:<15} {}\n",
-                "URL",
-                url.pretty_str(CondaURL::StripScheme::no, '/', CondaURL::Credentials::Hide)
+                std::make_format_args(
+                    "URL",
+                    url.pretty_str(CondaURL::StripScheme::no, '/', CondaURL::Credentials::Hide)
+                )
             );
 
-            fmt::print(out, fmtstring, "MD5", pkg.md5.empty() ? "Not available" : pkg.md5);
-            fmt::print(out, fmtstring, "SHA256", pkg.sha256.empty() ? "Not available" : pkg.sha256);
+            out << std::vformat(
+                fmtstring,
+                std::make_format_args("MD5", pkg.md5.empty() ? "Not available" : pkg.md5)
+            );
+            out << std::vformat(
+                fmtstring,
+                std::make_format_args("SHA256", pkg.sha256.empty() ? "Not available" : pkg.sha256)
+            );
             if (!pkg.track_features.empty())
             {
-                fmt::print(out, fmtstring, "Track Features", fmt::join(pkg.track_features, ","));
+                // join track_features with commas
+                std::string feats;
+                for (size_t i = 0; i < pkg.track_features.size(); ++i)
+                {
+                    if (i != 0) feats += ',';
+                    feats += pkg.track_features[i];
+                }
+                out << std::vformat(fmtstring, std::make_format_args("Track Features", feats));
             }
 
             if (!pkg.python_site_packages_path.empty())
             {
-                fmt::print(out, fmtstring, "Site-packages", pkg.python_site_packages_path);
+                out << std::vformat(
+                    fmtstring,
+                    std::make_format_args("Site-packages", pkg.python_site_packages_path)
+                );
             }
 
             // std::cout << fmt::format<char>(
@@ -335,19 +352,19 @@ namespace mamba
 
             if (!pkg.constrains.empty())
             {
-                fmt::print(out, "\n Run Constraints:\n");
+                out << "\n Run Constraints:\n";
                 for (auto& c : pkg.constrains)
                 {
-                    fmt::print(out, "  - {}\n", c);
+                    out << std::vformat("  - {}\n", std::make_format_args(c));
                 }
             }
 
             if (!pkg.dependencies.empty())
             {
-                fmt::print(out, "\n Dependencies:\n");
+                out << "\n Dependencies:\n";
                 for (auto& d : pkg.dependencies)
                 {
-                    fmt::print(out, "  - {}\n", d);
+                    out << std::vformat("  - {}\n", std::make_format_args(d));
                 }
             }
         }
@@ -388,7 +405,7 @@ namespace mamba
                     {
                         printer.add_row(
                             { "...",
-                              fmt::format("({} hidden versions)", groupedOtherBuilds.size() - 4),
+                              std::format("({} hidden versions)", groupedOtherBuilds.size() - 4),
                               "",
                               "..." }
                         );
@@ -406,7 +423,7 @@ namespace mamba
                 if (it->second.size() > 1)
                 {
                     row.push_back("(+");
-                    row.push_back(fmt::format("{} builds)", it->second.size() - 1));
+                    row.push_back(std::format("{} builds)", it->second.size() - 1));
                 }
                 else
                 {
@@ -470,11 +487,14 @@ namespace mamba
             std::string additionalBuilds;
             if (numOtherBuildsForLatestVersion > 0)
             {
-                additionalBuilds = fmt::format(" (+ {} builds)", numOtherBuildsForLatestVersion);
+                additionalBuilds = std::format(" (+ {} builds)", numOtherBuildsForLatestVersion);
             }
-            std::string header = fmt::format("{} {} {}", pkg.name, pkg.version, pkg.build_string)
+            std::string header = std::format("{} {} {}", pkg.name, pkg.version, pkg.build_string)
                                  + additionalBuilds;
-            fmt::print(out, "{:^40}\n{:─^{}}\n\n", header, "", header.size() > 40 ? header.size() : 40);
+            out << std::vformat(
+                "{:^40}\n{:─^{}}\n\n",
+                std::make_format_args(header, std::string_view(""), header.size() > 40 ? header.size() : 40)
+            );
 
             // Print metadata.
             print_metadata(out, pkg);

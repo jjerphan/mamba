@@ -17,7 +17,7 @@
 #include <utility>
 #include <variant>
 
-#include <fmt/color.h>
+#include <mamba/util/fmt_compat.hpp>
 
 #include "mamba/specs/match_spec.hpp"
 #include "mamba/specs/package_info.hpp"

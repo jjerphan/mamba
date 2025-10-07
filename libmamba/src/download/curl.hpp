@@ -19,7 +19,7 @@ extern "C"
 #include <curl/curl.h>
 }
 
-#include <fmt/core.h>
+#include <mamba/util/fmt_compat.hpp>
 #include <tl/expected.hpp>
 
 namespace mamba::download

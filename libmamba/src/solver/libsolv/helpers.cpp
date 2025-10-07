@@ -9,7 +9,7 @@
 #include <type_traits>
 #include <variant>
 
-#include <fmt/ostream.h>
+#include <mamba/util/fmt_compat.hpp>
 #include <simdjson.h>
 #include <solv/conda.h>
 #include <solv/repo.h>

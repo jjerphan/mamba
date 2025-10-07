@@ -177,7 +177,7 @@ namespace mamba::specs
 
     auto VersionPartAtom::to_string() const -> std::string
     {
-        return fmt::format("{}", *this);
+        return std::format("{}", *this);
     }
 
     namespace
@@ -264,7 +264,7 @@ namespace mamba::specs
 }
 
 auto
-fmt::formatter<mamba::specs::VersionPartAtom>::format(
+std::formatter<mamba::specs::VersionPartAtom>::format(
     const ::mamba::specs::VersionPartAtom atom,
     format_context& ctx
 ) const -> format_context::iterator
@@ -298,7 +298,7 @@ namespace mamba::specs
 
     auto VersionPart::to_string() const -> std::string
     {
-        return fmt::format("{}", *this);
+        return std::format("{}", *this);
     }
 
     namespace
@@ -349,7 +349,7 @@ namespace mamba::specs
 }
 
 auto
-fmt::formatter<mamba::specs::VersionPart>::format(
+std::formatter<mamba::specs::VersionPart>::format(
     const ::mamba::specs::VersionPart part,
     format_context& ctx
 ) const -> format_context::iterator
@@ -410,21 +410,21 @@ namespace mamba::specs
 
     auto Version::to_string() const -> std::string
     {
-        return fmt::format("{}", *this);
+        return std::format("{}", *this);
     }
 
     auto Version::to_string(std::size_t level) const -> std::string
     {
         // We should be able to do, as it works with numbers but it is not clear how this works
         // with the custom parser
-        // return fmt::format("{:{}}", *this, level);
-        auto fmt = fmt::format("{{:{}}}", level);
-        return fmt::format(fmt::runtime(fmt), *this);
+        // return std::format("{:{}}", *this, level);
+        auto fmt = std::format("{{:{}}}", level);
+        return std::vformat(fmt, std::make_format_args(*this));
     }
 
     auto Version::to_string_glob() const -> std::string
     {
-        return fmt::format("{:g}", *this);
+        return std::format("{:g}", *this);
     }
 
     namespace
@@ -865,13 +865,13 @@ namespace mamba::specs
 }
 
 auto
-fmt::formatter<mamba::specs::Version>::format(const ::mamba::specs::Version v, format_context& ctx) const
+std::formatter<mamba::specs::Version>::format(const ::mamba::specs::Version v, format_context& ctx) const
     -> format_context::iterator
 {
     auto out = ctx.out();
     if (v.epoch() != 0)
     {
-        out = fmt::format_to(ctx.out(), "{}!", v.epoch());
+        out = std::format_to(ctx.out(), "{}!", v.epoch());
     }
 
 
@@ -882,22 +882,22 @@ fmt::formatter<mamba::specs::Version>::format(const ::mamba::specs::Version v, f
         {
             if (i != 0)
             {
-                l_out = fmt::format_to(l_out, ".");
+                l_out = std::format_to(l_out, ".");
             }
             if (i < version.size())
             {
                 if (m_type == FormatType::Glob && version[i] == mamba::specs::VERSION_GLOB_SEGMENT)
                 {
-                    l_out = fmt::format_to(l_out, "{}", mamba::specs::GLOB_PATTERN_STR);
+                    l_out = std::format_to(l_out, "{}", mamba::specs::GLOB_PATTERN_STR);
                 }
                 else
                 {
-                    l_out = fmt::format_to(l_out, "{}", version[i]);
+                    l_out = std::format_to(l_out, "{}", version[i]);
                 }
             }
             else
             {
-                l_out = fmt::format_to(l_out, "0");
+                l_out = std::format_to(l_out, "0");
             }
         }
         return l_out;
@@ -905,7 +905,7 @@ fmt::formatter<mamba::specs::Version>::format(const ::mamba::specs::Version v, f
     out = format_version_to(out, v.version());
     if (!v.local().empty())
     {
-        out = fmt::format_to(out, "+");
+        out = std::format_to(out, "+");
         out = format_version_to(out, v.local());
     }
     return out;

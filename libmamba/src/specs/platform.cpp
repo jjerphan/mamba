@@ -6,7 +6,7 @@
 
 #include <string>
 
-#include <fmt/format.h>
+#include <mamba/util/fmt_compat.hpp>
 #include <nlohmann/json.hpp>
 
 #include "mamba/specs/platform.hpp"

@@ -6,7 +6,7 @@
 
 #include <regex>
 
-#include <fmt/format.h>
+#include <mamba/util/fmt_compat.hpp>
 
 #include "mamba/util/os_unix.hpp"
 

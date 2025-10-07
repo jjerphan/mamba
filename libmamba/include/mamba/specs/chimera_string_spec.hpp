@@ -10,8 +10,7 @@
 #include <string_view>
 #include <variant>
 
-#include <fmt/core.h>
-#include <fmt/format.h>
+#include <mamba/util/fmt_compat.hpp>
 
 #include "mamba/specs/error.hpp"
 #include "mamba/specs/glob_spec.hpp"
@@ -70,14 +69,14 @@ namespace mamba::specs
 }
 
 template <>
-struct fmt::formatter<mamba::specs::ChimeraStringSpec>
+struct std::formatter<mamba::specs::ChimeraStringSpec>
 {
     constexpr auto parse(format_parse_context& ctx) -> format_parse_context::iterator
     {
         // make sure that range is empty
         if (ctx.begin() != ctx.end() && *ctx.begin() != '}')
         {
-            throw fmt::format_error("Invalid format");
+            throw std::format_error("Invalid format");
         }
         return ctx.begin();
     }

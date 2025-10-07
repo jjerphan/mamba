@@ -11,8 +11,7 @@
 #include <vector>
 
 #include <catch2/catch_all.hpp>
-#include <fmt/format.h>
-#include <fmt/ranges.h>
+#include <mamba/util/fmt_compat.hpp>
 #include <nlohmann/json.hpp>
 
 #include "mamba/core/channel_context.hpp"

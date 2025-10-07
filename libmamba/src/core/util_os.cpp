@@ -28,9 +28,7 @@
 #include "mamba/core/context.hpp"
 #endif
 
-#include <fmt/color.h>
-#include <fmt/format.h>
-#include <fmt/ostream.h>
+#include <mamba/util/fmt_compat.hpp>
 #include <reproc++/run.hpp>
 
 #include "mamba/core/error_handling.hpp"

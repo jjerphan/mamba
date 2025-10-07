@@ -9,7 +9,7 @@
 #include <vector>
 
 #include <catch2/catch_all.hpp>
-#include <fmt/format.h>
+#include <mamba/util/fmt_compat.hpp>
 
 #include "mamba/specs/version.hpp"
 #include "mamba/util/string.hpp"

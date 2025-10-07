@@ -6,7 +6,7 @@
 
 #include <iostream>
 
-#include <fmt/format.h>
+#include <mamba/util/fmt_compat.hpp>
 
 #include "mamba/api/shell.hpp"
 #include "mamba/core/activation.hpp"

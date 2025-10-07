@@ -9,8 +9,7 @@
 #include <type_traits>
 #include <variant>
 
-#include <fmt/format.h>
-#include <fmt/ranges.h>
+#include <mamba/util/fmt_compat.hpp>
 
 #include "mamba/specs/version_spec.hpp"
 #include "mamba/util/string.hpp"
@@ -319,7 +318,7 @@ namespace mamba::specs
 }
 
 auto
-fmt::formatter<mamba::specs::VersionPredicate>::format(
+std::formatter<mamba::specs::VersionPredicate>::format(
     const ::mamba::specs::VersionPredicate& pred,
     format_context& ctx
 ) const -> format_context::iterator
@@ -801,7 +800,7 @@ namespace mamba::specs
 }
 
 auto
-fmt::formatter<mamba::specs::VersionSpec>::format(
+std::formatter<mamba::specs::VersionSpec>::format(
     const ::mamba::specs::VersionSpec& spec,
     format_context& ctx
 ) const -> format_context::iterator
@@ -839,7 +838,7 @@ fmt::formatter<mamba::specs::VersionSpec>::format(
             }
             if constexpr (std::is_same_v<Token, tree_type::variable_type>)
             {
-                out = fmt::format_to(out, fmt::runtime(conda_build_form ? "{:b}" : "{}"), token);
+                out = std::format_to(out, conda_build_form ? "{:b}" : "{}", token);
             }
         }
     );

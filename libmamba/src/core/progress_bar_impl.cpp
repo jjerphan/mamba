@@ -206,7 +206,7 @@ namespace mamba
 
             if (r.style().has_foreground())
             {
-                ostream << fmt::format(r.style(), "{}", sstream.str());
+                ostream << std::vformat(r.style(), std::make_format_args(std::string("{}"), sstream.str()));
                 sstream.str("");
             }
 
@@ -224,11 +224,11 @@ namespace mamba
 
             if (r.style().has_foreground())
             {
-                ostream << fmt::format(r.style(), "{}", sstream.str());
+                ostream << std::vformat(r.style(), std::make_format_args(std::string("{}"), sstream.str()));
             }
             else
             {
-                ostream << fmt::format("{}", sstream.str());
+                ostream << sstream.str();
             }
         }
     }
@@ -673,16 +673,16 @@ namespace mamba
             {
                 if (end)
                 {
-                    sstream << fmt::format(color, "{:━>{}}", "", width);
+                    sstream << std::vformat(color, std::make_format_args(std::string("{:━>{}}"), std::string(), width));
                 }
                 else
                 {
-                    sstream << fmt::format(color, "{:━>{}}╸", "", width - 1);
+                    sstream << std::vformat(color, std::make_format_args(std::string("{:━>{}}╸"), std::string(), width - 1));
                 }
             }
             else
             {
-                sstream << fmt::format(color, "{:->{}}", "", width);
+                sstream << std::vformat(color, std::make_format_args(std::string("{:->{}}"), std::string(), width));
             }
         }
 
@@ -917,7 +917,7 @@ namespace mamba
                                progress * (double(spinner_rounds * spinner.size()) / 100.0)
                            ))
                            % spinner.size();
-                sstream << fmt::format("{:^4}", spinner[pos]);
+                sstream << std::vformat("{:^4}", std::make_format_args(spinner[pos]));
             }
             else
             {
@@ -1643,7 +1643,7 @@ namespace mamba
     ProgressBarRepr& ProgressBar::update_repr(bool compute_progress)
     {
         call_progress_hook();
-        m_repr.elapsed.set_value(fmt::format("{:>5}", elapsed_time_to_str()));
+                m_repr.elapsed.set_value(std::format("{:>5}", elapsed_time_to_str()));
         call_repr_hook();
 
         if (compute_progress)
@@ -1802,7 +1802,7 @@ namespace mamba
 
             if (max_sub_bars && active_count >= max_sub_bars)
             {
-                ostream << fmt::format(" > {} more active", not_displayed) << "\n";
+                ostream << std::format(" > {} more active", not_displayed) << "\n";
                 ++active_count;
             }
 

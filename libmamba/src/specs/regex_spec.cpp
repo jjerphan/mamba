@@ -126,7 +126,7 @@ namespace mamba::specs
 }
 
 auto
-fmt::formatter<mamba::specs::RegexSpec>::format(
+std::formatter<mamba::specs::RegexSpec>::format(
     const ::mamba::specs::RegexSpec& spec,
     format_context& ctx
 ) const -> format_context::iterator

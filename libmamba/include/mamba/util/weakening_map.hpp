@@ -4,12 +4,15 @@
 //
 // The full license is in the file LICENSE, distributed with this software.
 
-#ifndef MAMBA_UTIL_WEAKENING_MAP_HPP
-#define MAMBA_UTIL_WEAKENING_MAP_HPP
+#pragma once
 
 #include <stdexcept>
 
-#include <fmt/format.h>
+#include <mamba/util/fmt_compat.hpp>
+
+#include <unordered_map>
+#include <optional>
+#include <vector>
 
 namespace mamba::util
 {
@@ -189,4 +192,3 @@ namespace mamba::util
         return a.generic() != b.generic();
     }
 }
-#endif

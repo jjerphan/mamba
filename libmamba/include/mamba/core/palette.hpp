@@ -7,7 +7,7 @@
 #ifndef MAMBA_CORE_PALETTE_HPP
 #define MAMBA_CORE_PALETTE_HPP
 
-#include <fmt/color.h>
+#include <mamba/util/fmt_compat.hpp>
 
 namespace mamba
 {

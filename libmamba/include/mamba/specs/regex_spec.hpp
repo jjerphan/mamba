@@ -11,8 +11,7 @@
 #include <string>
 #include <string_view>
 
-#include <fmt/core.h>
-#include <fmt/format.h>
+#include <mamba/util/fmt_compat.hpp>
 
 #include "mamba/specs/error.hpp"
 
@@ -68,14 +67,14 @@ namespace mamba::specs
 }
 
 template <>
-struct fmt::formatter<mamba::specs::RegexSpec>
+struct std::formatter<mamba::specs::RegexSpec>
 {
     constexpr auto parse(format_parse_context& ctx) -> format_parse_context::iterator
     {
         // make sure that range is empty
         if (ctx.begin() != ctx.end() && *ctx.begin() != '}')
         {
-            throw fmt::format_error("Invalid format");
+            throw std::format_error("Invalid format");
         }
         return ctx.begin();
     }

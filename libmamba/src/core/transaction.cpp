@@ -13,9 +13,8 @@
 #include <utility>
 #include <vector>
 
-#include <fmt/color.h>
-#include <fmt/format.h>
-#include <fmt/ostream.h>
+#include <mamba/util/fmt_compat.hpp>
+#include <spdlog/spdlog.h>
 
 #include "mamba/core/channel_context.hpp"
 #include "mamba/core/context.hpp"

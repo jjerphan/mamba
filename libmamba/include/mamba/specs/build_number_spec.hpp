@@ -12,7 +12,7 @@
 #include <string_view>
 #include <variant>
 
-#include <fmt/format.h>
+#include <mamba/util/fmt_compat.hpp>
 
 #include "mamba/specs/error.hpp"
 
@@ -72,7 +72,7 @@ namespace mamba::specs
         friend auto equal(free_interval, free_interval) -> bool;
         friend auto operator==(const BuildNumberPredicate& lhs, const BuildNumberPredicate& rhs)
             -> bool;
-        friend struct ::fmt::formatter<BuildNumberPredicate>;
+        friend struct ::std::formatter<BuildNumberPredicate>;
     };
 
     auto operator==(const BuildNumberPredicate& lhs, const BuildNumberPredicate& rhs) -> bool;
@@ -132,7 +132,7 @@ namespace mamba::specs
 
         BuildNumberPredicate m_predicate;
 
-        friend struct ::fmt::formatter<BuildNumberSpec>;
+        friend struct ::std::formatter<BuildNumberSpec>;
     };
 
     namespace build_number_spec_literals
@@ -142,7 +142,7 @@ namespace mamba::specs
 }
 
 template <>
-struct fmt::formatter<mamba::specs::BuildNumberPredicate>
+struct std::formatter<mamba::specs::BuildNumberPredicate>
 {
     constexpr auto parse(format_parse_context& ctx) -> format_parse_context::iterator
     {
@@ -159,7 +159,7 @@ struct fmt::formatter<mamba::specs::BuildNumberPredicate>
 };
 
 template <>
-struct fmt::formatter<mamba::specs::BuildNumberSpec>
+struct std::formatter<mamba::specs::BuildNumberSpec>
 {
     constexpr auto parse(format_parse_context& ctx) -> format_parse_context::iterator
     {

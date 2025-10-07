@@ -7,7 +7,7 @@
 #include <algorithm>
 #include <charconv>
 
-#include <fmt/format.h>
+#include <mamba/util/fmt_compat.hpp>
 
 #include "mamba/specs/build_number_spec.hpp"
 #include "mamba/util/string.hpp"
@@ -98,7 +98,7 @@ namespace mamba::specs
 }
 
 auto
-fmt::formatter<mamba::specs::BuildNumberPredicate>::format(
+std::formatter<mamba::specs::BuildNumberPredicate>::format(
     const ::mamba::specs::BuildNumberPredicate& pred,
     format_context& ctx
 ) const -> format_context::iterator
@@ -241,7 +241,7 @@ namespace mamba::specs
 }
 
 auto
-fmt::formatter<mamba::specs::BuildNumberSpec>::format(
+std::formatter<mamba::specs::BuildNumberSpec>::format(
     const ::mamba::specs::BuildNumberSpec& spec,
     format_context& ctx
 ) const -> decltype(ctx.out())

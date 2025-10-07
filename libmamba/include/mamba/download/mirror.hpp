@@ -13,7 +13,7 @@
 #include <string>
 #include <vector>
 
-#include <fmt/core.h>
+#include <mamba/util/fmt_compat.hpp>
 
 #include "mamba/download/request.hpp"
 #include "mamba/util/synchronized_value.hpp"

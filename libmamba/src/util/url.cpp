@@ -14,7 +14,7 @@
 #include <type_traits>
 
 #include <curl/urlapi.h>
-#include <fmt/format.h>
+#include <mamba/util/fmt_compat.hpp>
 
 #include "mamba/util/build.hpp"
 #include "mamba/util/encoding.hpp"

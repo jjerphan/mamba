@@ -15,9 +15,7 @@
 #include <type_traits>
 #include <vector>
 
-#include <fmt/color.h>
-#include <fmt/format.h>
-#include <fmt/ostream.h>
+#include <mamba/util/fmt_compat.hpp>
 
 #include "mamba/solver/problems_graph.hpp"
 #include "mamba/util/string.hpp"
@@ -1314,11 +1312,13 @@ namespace mamba::solver
                 {
                     const auto style = tn.status ? m_format.available : m_format.unavailable;
                     auto [versions_trunc, size] = node.versions_trunc();
-                    write(fmt::format(
+                    write(std::vformat(
                         style,
-                        fmt::runtime(size == 1 ? "{} {}" : "{} [{}]"),
-                        node.name(),
-                        versions_trunc
+                        std::make_format_args(
+                            std::string(size == 1 ? "{} {}" : "{} [{}]"),
+                            node.name(),
+                            versions_trunc
+                        )
                     ));
                 }
             };
@@ -1383,11 +1383,13 @@ namespace mamba::solver
                 }
                 else
                 {
-                    write(fmt::format(
+                    write(std::vformat(
                         style,
-                        fmt::runtime(size == 1 ? "{} {}" : "{} [{}]"),
-                        edges.name(),
-                        relevant_vers_builds_trunc
+                        std::make_format_args(
+                            std::string(size == 1 ? "{} {}" : "{} [{}]"),
+                            edges.name(),
+                            relevant_vers_builds_trunc
+                        )
                     ));
                 }
             }

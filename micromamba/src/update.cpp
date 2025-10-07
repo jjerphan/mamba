@@ -4,8 +4,7 @@
 //
 // The full license is in the file LICENSE, distributed with this software.
 
-#include <fmt/color.h>
-#include <fmt/format.h>
+#include <mamba/util/fmt_compat.hpp>
 #include <reproc++/run.hpp>
 
 #include "mamba/api/channel_loader.hpp"

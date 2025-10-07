@@ -12,7 +12,7 @@
 #include <string_view>
 #include <vector>
 
-#include <fmt/format.h>
+#include <mamba/util/fmt_compat.hpp>
 
 #include "mamba/specs/error.hpp"
 #include "mamba/util/charconv.hpp"
@@ -213,14 +213,14 @@ namespace mamba::specs
 }
 
 template <>
-struct fmt::formatter<mamba::specs::VersionPartAtom>
+struct std::formatter<mamba::specs::VersionPartAtom>
 {
     constexpr auto parse(format_parse_context& ctx) -> format_parse_context::iterator
     {
         // make sure that range is empty
         if (ctx.begin() != ctx.end() && *ctx.begin() != '}')
         {
-            throw fmt::format_error("Invalid format");
+            throw std::format_error("Invalid format");
         }
         return ctx.begin();
     }
@@ -230,14 +230,14 @@ struct fmt::formatter<mamba::specs::VersionPartAtom>
 };
 
 template <>
-struct fmt::formatter<mamba::specs::VersionPart>
+struct std::formatter<mamba::specs::VersionPart>
 {
     constexpr auto parse(format_parse_context& ctx) -> format_parse_context::iterator
     {
         // make sure that range is empty
         if (ctx.begin() != ctx.end() && *ctx.begin() != '}')
         {
-            throw fmt::format_error("Invalid format");
+            throw std::format_error("Invalid format");
         }
         return ctx.begin();
     }
@@ -247,7 +247,7 @@ struct fmt::formatter<mamba::specs::VersionPart>
 };
 
 template <>
-struct fmt::formatter<mamba::specs::Version>
+struct std::formatter<mamba::specs::Version>
 {
     enum struct FormatType
     {

@@ -6,7 +6,7 @@
 
 #include <string_view>
 
-#include <fmt/format.h>
+#include <mamba/util/fmt_compat.hpp>
 #include <solv/evr.h>
 #include <solv/selection.h>
 #include <solv/solver.h>

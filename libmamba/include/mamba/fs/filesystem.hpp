@@ -10,7 +10,7 @@
 #include <filesystem>
 #include <string>
 
-#include <fmt/format.h>
+#include <mamba/util/fmt_compat.hpp>
 
 //---- RATIONALE: Why do we wrap standard filesystem here? ----
 // 1. This codebase relies on `std::string` and `const char*` to denote UTF-8 encoded text.
@@ -1318,7 +1318,7 @@ struct std::hash<::mamba::fs::u8path>
 };
 
 template <>
-struct fmt::formatter<::mamba::fs::u8path>
+struct std::formatter<::mamba::fs::u8path>
 {
     constexpr auto parse(format_parse_context& ctx) -> decltype(ctx.begin())
     {

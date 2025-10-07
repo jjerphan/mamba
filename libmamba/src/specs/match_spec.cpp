@@ -8,7 +8,7 @@
 #include <string_view>
 #include <tuple>
 
-#include <fmt/ranges.h>
+#include <mamba/util/fmt_compat.hpp>
 
 #include "mamba/specs/archive.hpp"
 #include "mamba/specs/match_spec.hpp"
@@ -1122,7 +1122,7 @@ namespace mamba::specs
 }
 
 auto
-fmt::formatter<::mamba::specs::MatchSpec>::format(
+std::formatter<::mamba::specs::MatchSpec>::format(
     const ::mamba::specs::MatchSpec& spec,
     format_context& ctx
 ) const -> format_context::iterator

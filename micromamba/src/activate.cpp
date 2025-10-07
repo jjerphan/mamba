@@ -8,7 +8,7 @@
 #include <string_view>
 
 #include <CLI/App.hpp>
-#include <fmt/format.h>
+#include <mamba/util/fmt_compat.hpp>
 
 #include "mamba/core/shell_init.hpp"
 #include "mamba/core/util.hpp"

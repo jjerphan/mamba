@@ -9,7 +9,7 @@
 #include <string_view>
 #include <tuple>
 
-#include <fmt/format.h>
+#include <mamba/util/fmt_compat.hpp>
 
 #include "mamba/specs/archive.hpp"
 #include "mamba/specs/conda_url.hpp"

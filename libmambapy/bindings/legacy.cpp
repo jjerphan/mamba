@@ -6,7 +6,7 @@
 
 #include <stdexcept>
 
-#include <fmt/format.h>
+#include <mamba/util/fmt_compat.hpp>
 #include <nlohmann/json.hpp>
 #include <pybind11/functional.h>
 #include <pybind11/iostream.h>

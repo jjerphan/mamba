@@ -9,7 +9,7 @@
 #include <unordered_map>
 #include <utility>
 
-#include <fmt/ranges.h>
+#include <mamba/util/fmt_compat.hpp>
 #include <reproc++/run.hpp>
 
 #include "mamba/core/channel_context.hpp"

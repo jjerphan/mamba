@@ -125,7 +125,7 @@ namespace mamba::specs
 }
 
 auto
-fmt::formatter<mamba::specs::ChimeraStringSpec>::format(
+std::formatter<mamba::specs::ChimeraStringSpec>::format(
     const ::mamba::specs::ChimeraStringSpec& spec,
     format_context& ctx
 ) const -> decltype(ctx.out())

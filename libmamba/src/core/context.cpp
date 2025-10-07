@@ -6,8 +6,7 @@
 
 #include <iostream>
 
-#include <fmt/ostream.h>
-#include <fmt/ranges.h>
+#include <mamba/util/fmt_compat.hpp>
 #include <spdlog/pattern_formatter.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/spdlog.h>

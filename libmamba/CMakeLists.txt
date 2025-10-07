@@ -466,9 +466,8 @@ macro(libmamba_create_target target_name linkage output_name)
     mamba_target_set_lto(${target_name} MODE ${MAMBA_LTO})
 
     # For some reasons, using target_compile_definitions does not set the definitions properly
-    add_compile_definitions(
-        SPDLOG_FMT_EXTERNAL "SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${BUILD_LOG_LEVEL}"
-    )
+    # Keep spdlog level; will switch to std::format after migrating sources
+    add_compile_definitions("SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${BUILD_LOG_LEVEL}")
 
     if(${linkage_upper} STREQUAL "STATIC")
         message("   -> Statically linking against libmamba (static) dependencies")

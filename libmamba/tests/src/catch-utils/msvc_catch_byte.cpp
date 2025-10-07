@@ -7,7 +7,7 @@
 #include <string>
 
 #include <catch2/catch_tostring.hpp>
-#include <fmt/format.h>
+#include <mamba/util/fmt_compat.hpp>
 
 namespace Catch
 {

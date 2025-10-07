@@ -23,10 +23,7 @@ extern "C"
 #include <process.h>
 #endif
 
-#include <fmt/color.h>
-#include <fmt/format.h>
-#include <fmt/ostream.h>
-#include <fmt/ranges.h>
+#include <mamba/util/fmt_compat.hpp>
 #include <nlohmann/json.hpp>
 #include <reproc++/run.hpp>
 #include <spdlog/spdlog.h>

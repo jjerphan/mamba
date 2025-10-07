@@ -10,9 +10,7 @@
 #include <map>
 #include <string>
 
-#include <fmt/color.h>
-#include <fmt/format.h>
-#include <fmt/ostream.h>
+#include <mamba/util/fmt_compat.hpp>
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/spdlog.h>
 #ifdef _WIN32

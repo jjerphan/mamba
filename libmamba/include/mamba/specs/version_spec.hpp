@@ -12,7 +12,7 @@
 #include <string_view>
 #include <variant>
 
-#include <fmt/format.h>
+#include <mamba/util/fmt_compat.hpp>
 
 #include "mamba/specs/error.hpp"
 #include "mamba/specs/version.hpp"
@@ -148,7 +148,7 @@ namespace mamba::specs
         friend auto operator==(version_glob, version_glob) -> bool;
         friend auto operator==(not_version_glob, not_version_glob) -> bool;
         friend auto operator==(const VersionPredicate& lhs, const VersionPredicate& rhs) -> bool;
-        friend struct ::fmt::formatter<VersionPredicate>;
+        friend struct ::std::formatter<VersionPredicate>;
     };
 
     auto operator==(const VersionPredicate& lhs, const VersionPredicate& rhs) -> bool;
@@ -262,7 +262,7 @@ namespace mamba::specs
 
         tree_type m_tree;
 
-        friend struct ::fmt::formatter<VersionSpec>;
+        friend struct ::std::formatter<VersionSpec>;
     };
 
     namespace version_spec_literals
@@ -272,7 +272,7 @@ namespace mamba::specs
 }
 
 template <>
-struct fmt::formatter<mamba::specs::VersionPredicate>
+struct std::formatter<mamba::specs::VersionPredicate>
 {
     /**
      * Change the representation of some predicates not understood by conda-build/libsolv.
@@ -298,7 +298,7 @@ struct fmt::formatter<mamba::specs::VersionPredicate>
 };
 
 template <>
-struct fmt::formatter<mamba::specs::VersionSpec>
+struct std::formatter<mamba::specs::VersionSpec>
 {
     /**
      * Change the representation of some predicates not understood by conda-build/libsolv.

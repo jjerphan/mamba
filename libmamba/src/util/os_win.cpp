@@ -9,8 +9,7 @@
 #include <stdexcept>
 #include <string>
 
-#include <fmt/format.h>
-#include <fmt/ranges.h>
+#include <mamba/util/fmt_compat.hpp>
 #include <reproc++/run.hpp>
 
 #include "mamba/util/environment.hpp"

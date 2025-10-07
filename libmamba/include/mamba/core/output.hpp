@@ -8,12 +8,13 @@
 #define MAMBA_CORE_OUTPUT_HPP
 
 #include <iosfwd>
+#include <cassert>
 #include <sstream>
 #include <string>
 #include <string_view>
 #include <vector>
 
-#include <fmt/color.h>
+#include <mamba/util/fmt_compat.hpp>
 #include <nlohmann/json.hpp>
 
 #include "mamba/core/common_types.hpp"
@@ -111,6 +112,8 @@ namespace mamba
     };
 
     class ProgressBarManager;
+    class ProgressProxy;
+    enum class ProgressBarMode : int;
     class ConsoleData;
 
     class Console

@@ -8,10 +8,9 @@
 #include <functional>
 #include <tuple>
 #include <type_traits>
+#include <sstream>
 
-#include <fmt/core.h>
-#include <fmt/format.h>
-#include <fmt/ranges.h>
+#include <mamba/util/fmt_compat.hpp>
 #include <nlohmann/json.hpp>
 
 #include "mamba/specs/archive.hpp"
@@ -79,7 +78,7 @@ namespace mamba::specs
                 if (!head.has_value())
                 {
                     return make_unexpected_parse(
-                        fmt::format(R"(Missing name and version in filename "{}".)", out.filename)
+                        std::format(R"(Missing name and version in filename "{}".)", out.filename)
                     );
                 }
 
@@ -89,7 +88,7 @@ namespace mamba::specs
                 if (!head.has_value())
                 {
                     return make_unexpected_parse(
-                        fmt::format(R"(Missing name in filename "{}".)", out.filename)
+                        std::format(R"(Missing name in filename "{}".)", out.filename)
                     );
                 }
 
@@ -107,7 +106,7 @@ namespace mamba::specs
                 if (!head.has_value())
                 {
                     return make_unexpected_parse(
-                        fmt::format(R"(Missing tags in filename "{}".)", out.filename)
+                        std::format(R"(Missing tags in filename "{}".)", out.filename)
                     );
                 }
                 // Abi tag
@@ -115,7 +114,7 @@ namespace mamba::specs
                 if (!head.has_value())
                 {
                     return make_unexpected_parse(
-                        fmt::format(R"(Missing tags in filename "{}".)", out.filename)
+                        std::format(R"(Missing tags in filename "{}".)", out.filename)
                     );
                 }
                 // Python tag
@@ -123,7 +122,7 @@ namespace mamba::specs
                 if (!head.has_value())
                 {
                     return make_unexpected_parse(
-                        fmt::format(R"(Missing tags in filename "{}".)", out.filename)
+                        std::format(R"(Missing tags in filename "{}".)", out.filename)
                     );
                 }
                 // Build tag or version
@@ -150,7 +149,7 @@ namespace mamba::specs
                     if (!head.has_value())
                     {
                         return make_unexpected_parse(
-                            fmt::format(R"(Missing name in filename "{}".)", out.filename)
+                            std::format(R"(Missing name in filename "{}".)", out.filename)
                         );
                     }
 
@@ -167,7 +166,7 @@ namespace mamba::specs
                 if (!head.has_value())
                 {
                     return make_unexpected_parse(
-                        fmt::format(R"(Missing name in filename "{}".)", out.filename)
+                        std::format(R"(Missing name in filename "{}".)", out.filename)
                     );
                 }
 
@@ -254,7 +253,7 @@ namespace mamba::specs
             return pkg;
         }
 
-        return make_unexpected_parse(fmt::format(R"(Fail to parse PackageInfo URL "{}")", str));
+        return make_unexpected_parse(std::format(R"(Fail to parse PackageInfo URL "{}")", str));
     }
 
     PackageInfo::PackageInfo(std::string n)
@@ -334,7 +333,7 @@ namespace mamba::specs
         {
             return std::string(specs::strip_archive_extension(filename));
         }
-        return fmt::format("{}-{}-{}", name, version, build_string);
+        return std::format("{}-{}-{}", name, version, build_string);
     }
 
     auto PackageInfo::long_str() const -> std::string
@@ -366,9 +365,11 @@ namespace mamba::specs
             {
                 return std::string(std::invoke(field, p));
             }
-            else if constexpr (fmt::is_formattable<Out>::value)
+            else
             {
-                return fmt::format("{}", std::invoke(field, p));
+                std::ostringstream oss;
+                oss << std::invoke(field, p);
+                return oss.str();
             }
             return "";
         }
@@ -429,7 +430,7 @@ namespace mamba::specs
         {
             return invoke_field_string(*this, &PackageInfo::timestamp);
         }
-        throw std::invalid_argument(fmt::format(R"(Invalid field "{}")", field_name));
+        throw std::invalid_argument(std::format(R"(Invalid field "{}")", field_name));
     }
 
     namespace
@@ -489,7 +490,15 @@ namespace mamba::specs
             j["noarch"] = pkg.noarch;
         }
         j["license"] = pkg.license;
-        j["track_features"] = fmt::format("{}", fmt::join(pkg.track_features, ","));  // Conda fmt
+        {
+            std::string joined;
+            for (size_t i = 0; i < pkg.track_features.size(); ++i)
+            {
+                if (i != 0) joined += ',';
+                joined += pkg.track_features[i];
+            }
+            j["track_features"] = joined;  // Conda fmt
+        }
         if (!pkg.md5.empty())
         {
             j["md5"] = pkg.md5;
