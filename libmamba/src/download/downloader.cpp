@@ -84,8 +84,22 @@ namespace mamba::download
                 // from `conda-forge::ca-certificates` and the system CA certificates.
                 else if (remote_fetch_params.ssl_verify == "<system>")
                 {
-                    // Use the CA certificates from `conda-forge::ca-certificates` installed in the
-                    // root prefix or the system CA certificates if the certificate is not present.
+                    fs::u8path libmamba_path = get_libmamba_path();
+                    fs::u8path env_prefix_conda_cert = libmamba_path / "ssl" / "cacert.pem";
+
+                    LOG_INFO << "Checking for CA certificates in the same environment as the libmamba installation: "
+                             << env_prefix_conda_cert;
+
+                    if (fs::exists(env_prefix_conda_cert))
+                    {
+                        LOG_INFO << "Using CA certificates from the same prefix as the libmamba installation "
+                                 << "(i.e " << env_prefix_conda_cert << ")";
+                        remote_fetch_params.ssl_verify = env_prefix_conda_cert;
+                        return;
+                    }
+
+                    // Try to use the CA certificates from `conda-forge::ca-certificates` installed
+                    // in the root prefix.
                     fs::u8path root_prefix = detail::get_root_prefix();
                     fs::u8path env_prefix_conda_cert = root_prefix / "ssl" / "cacert.pem";
 
