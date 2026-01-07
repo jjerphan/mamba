@@ -60,12 +60,12 @@ set(libmamba_spdlog_targets "")
 
 if(BUILD_SHARED)
     message(STATUS "Adding target libmamba-spdlog with shared libmamba")
-    libmamba_spdlog_create_target(libmamba-dyn-spdlog SHARED libmamba-dyn)
+    libmamba_spdlog_create_target(libmamba-dyn-spdlog SHARED mamba::libmamba-dyn)
 endif()
 
 if(BUILD_STATIC)
     message(STATUS "Adding target libmamba-spdlog with static libmamba")
-    libmamba_spdlog_create_target(libmamba-static-spdlog STATIC libmamba-static)
+    libmamba_spdlog_create_target(libmamba-static-spdlog STATIC mamba::libmamba-static)
 endif()
 
 if(BUILD_SHARED)
