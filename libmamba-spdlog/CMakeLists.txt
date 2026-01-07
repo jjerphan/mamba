@@ -76,6 +76,7 @@ else()
     message(FATAL_ERROR "Select at least a build variant for libmamba")
 endif()
 
+include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 write_basic_package_version_file(
     "${PROJECT_BINARY_DIR}/${PROJECT_NAME}Version.cmake"
