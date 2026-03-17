@@ -1,0 +1,6 @@
+libsolv usage:
+
+This port provides CMake config files. In your CMakeLists.txt, you can use:
+
+  find_package(libsolv CONFIG REQUIRED)
+  target_link_libraries(main PRIVATE libsolv::solv libsolv::solvext)

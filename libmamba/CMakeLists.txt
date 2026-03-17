@@ -490,13 +490,20 @@ macro(libmamba_create_target target_name linkage output_name)
         mamba_target_check_type(reproc++ STATIC_LIBRARY FATAL_ERROR)
         mamba_target_check_type(${MSGPACK_TARGET} STATIC_LIBRARY FATAL_ERROR)
 
+        # Prefer static simdjson target when available, otherwise use the default
+        if(TARGET simdjson::simdjson_static)
+            set(SIMDJSON_TARGET simdjson::simdjson_static)
+        else()
+            set(SIMDJSON_TARGET simdjson::simdjson)
+        endif()
+
         target_link_libraries(
             ${target_name}
             PUBLIC fmt::fmt-header-only yaml-cpp::yaml-cpp ${MSGPACK_TARGET}
             PRIVATE
                 reproc
                 reproc++
-                simdjson::simdjson_static
+                ${SIMDJSON_TARGET}
                 solv::libsolv_static
                 solv::libsolvext_static
                 solv::cpp
@@ -507,30 +514,22 @@ macro(libmamba_create_target target_name linkage output_name)
             set(
                 REQUIRED_STATIC_DEPS
                 libcurl.a
-                libssh2.a
-                libgssapi_krb5.a
-                libkrb5.a
-                libk5crypto.a
-                libkrb5support.a
-                libcom_err.a
                 libssl.a
                 libcrypto.a
                 libarchive.a
-                libiconv.a
+                libxml2.a
                 libbz2.a
                 liblz4.a
+                liblzo2.a
                 libzstd.a
                 libz.a
                 liblzma.a
-                libnghttp2.a
                 libmsgpack-c.a
             )
             if(APPLE)
-                set(REQUIRED_STATIC_DEPS ${REQUIRED_STATIC_DEPS} libc++.a)
-            endif()
-
-            if(UNIX AND NOT APPLE)
-                list(REMOVE_ITEM REQUIRED_STATIC_DEPS libiconv.a)
+                # On macOS we need to explicitly link libiconv + libcharset (and libc++ in our
+                # fully-static build)
+                set(REQUIRED_STATIC_DEPS ${REQUIRED_STATIC_DEPS} libiconv.a libcharset.a libc++.a)
             endif()
 
             set(STATIC_DEPS "")

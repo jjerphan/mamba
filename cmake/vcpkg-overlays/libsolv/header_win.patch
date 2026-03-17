@@ -1,0 +1,16 @@
+diff --git a/src/chksum.c b/src/chksum.c
+index dead8d567..aeb3f585 100644
+--- a/src/chksum.c
++++ b/src/chksum.c
+@@ -9,8 +9,10 @@
+ #include <stdlib.h>
+ #include <string.h>
+ #include <stdio.h>
+-#include <unistd.h>
+ #include <fcntl.h>
++#ifndef _WIN32
++#include <unistd.h>
++#endif
+
+ #include "pool.h"
+ #include "util.h"

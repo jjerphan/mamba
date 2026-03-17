@@ -54,6 +54,7 @@ set(
 find_package(Threads REQUIRED)
 find_package(reproc REQUIRED)
 find_package(reproc++ REQUIRED)
+find_package(CLI11 CONFIG REQUIRED)
 
 macro(mambaexe_create_target target_name linkage output_name)
     string(TOUPPER "${linkage}" linkage_upper)
@@ -76,6 +77,7 @@ macro(mambaexe_create_target target_name linkage output_name)
     )
 
     target_link_libraries(${target_name} PRIVATE Threads::Threads reproc reproc++)
+    target_link_libraries(${target_name} PRIVATE CLI11::CLI11)
 
     # Static build
     # ============

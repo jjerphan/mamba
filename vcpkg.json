@@ -4,6 +4,19 @@
     "curl",
     "libiconv",
     "libxml2",
+    "tl-expected",
+    "cli11",
+    "fmt",
+    "spdlog",
+    "nlohmann-json",
+    "simdjson",
+    "yaml-cpp",
+    "reproc",
+    "msgpack-c",
+    {
+      "name": "libsolv",
+      "features": ["conda", "lzma", "bzip2", "zstd"]
+    },
     {
       "name": "winreg",
       "platform": "windows"

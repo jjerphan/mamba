@@ -1,31 +1,59 @@
 {
+  "version": 4,
+  "include": ["dev/CMakePresetsUnix.json", "dev/CMakePresetsMamba.json"],
   "configurePresets": [
     {
+      "name": "mamba-unix-shared-debug",
       "displayName": "Mamba Unix Shared Debug",
-      "inherits": ["conda-unix", "libmamba-all", "mamba-shared", "mamba-debug"],
-      "name": "mamba-unix-shared-debug"
+      "inherits": ["conda-unix", "libmamba-all", "mamba-shared", "mamba-debug"]
     },
     {
+      "name": "mamba-unix-shared-release",
       "displayName": "Mamba Unix Shared Release",
       "inherits": [
         "conda-unix",
         "libmamba-all",
         "mamba-shared",
         "mamba-release"
-      ],
-      "name": "mamba-unix-shared-release"
+      ]
     },
     {
+      "name": "mamba-unix-shared-debug-dev",
       "displayName": "Mamba Unix Shared Debug Dev",
-      "inherits": ["mamba-unix-shared-debug", "mamba-dev"],
-      "name": "mamba-unix-shared-debug-dev"
+      "inherits": ["mamba-unix-shared-debug", "mamba-dev"]
     },
     {
+      "name": "mamba-win-shared-release",
       "displayName": "Mamba Win Shared Release",
-      "inherits": ["libmamba-all", "mamba-shared", "mamba-release"],
-      "name": "mamba-win-shared-release"
+      "inherits": ["libmamba-all", "mamba-shared", "mamba-release"]
+    },
+    {
+      "name": "micromamba-vcpkg-linux-frameptr",
+      "displayName": "Micromamba vcpkg Linux (frame pointers)",
+      "description": "Linux micromamba build using vcpkg with libsolv overlay and frame pointers enabled for perf(1).",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/micromamba-vcpkg-linux-frameptr",
+      "cacheVariables": {
+        "CMAKE_TOOLCHAIN_FILE": "",
+        "VCPKG_TARGET_TRIPLET": "x64-linux",
+        "VCPKG_OVERLAY_PORTS": "${sourceDir}/cmake/vcpkg-overlays",
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "BUILD_LIBMAMBA": "ON",
+        "BUILD_LIBMAMBA_SPDLOG": "ON",
+        "BUILD_STATIC": "ON",
+        "BUILD_MICROMAMBA": "ON",
+        "MAMBA_LTO": "Off",
+        "CMAKE_C_FLAGS": "-fno-omit-frame-pointer",
+        "CMAKE_CXX_FLAGS": "-fno-omit-frame-pointer"
+      }
     }
   ],
-  "include": ["dev/CMakePresetsUnix.json", "dev/CMakePresetsMamba.json"],
-  "version": 4
+  "buildPresets": [
+    {
+      "name": "micromamba-vcpkg-linux-frameptr-build",
+      "displayName": "Build micromamba (vcpkg Linux frameptr)",
+      "configurePreset": "micromamba-vcpkg-linux-frameptr",
+      "targets": ["micromamba"]
+    }
+  ]
 }

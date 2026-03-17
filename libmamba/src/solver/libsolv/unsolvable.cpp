@@ -9,6 +9,7 @@
 #include <vector>
 
 #include <fmt/ranges.h>
+#include <solv/pool.h>
 #include <solv/problems.h>
 #include <solv/solver.h>
 
