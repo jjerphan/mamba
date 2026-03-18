@@ -52,14 +52,6 @@ namespace mamba
     using ShardsByUrl = std::map<std::string, std::size_t>;
 
     /**
-     * Extracts package names from dependency specs in a shard.
-     *
-     * Parses depends and constrains via specs::MatchSpec, returning the
-     * package names for dependency traversal.
-     */
-    [[nodiscard]] auto shard_mentioned_packages(const ShardDict& shard) -> std::vector<std::string>;
-
-    /**
      * Traverses sharded repodata to find reachable packages from root packages.
      *
      * Uses BFS or pipelined strategy to explore dependencies across shards.
@@ -94,6 +86,14 @@ namespace mamba
         std::vector<Shards> m_shards;
 
         NodeMap m_nodes;
+
+        // Cache of dependency names mentioned in a node's shard, computed on first visit.
+        // Keyed by NodeId to avoid re-parsing shard msgpack (which in some cases,
+        // can be running the expensive `MatchSpec` parsing logic).
+        std::map<NodeId, std::vector<std::string>> m_mentioned_packages;
+
+        const std::vector<std::string>&
+        mentioned_packages(const NodeId& node_id, const ShardDict& shard);
 
         void reachable_bfs(
             const std::vector<std::string>& root_packages,
