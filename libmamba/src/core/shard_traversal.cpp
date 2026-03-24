@@ -47,14 +47,9 @@ namespace mamba
         {
             for (const auto& spec : specs)
             {
-                auto parsed = specs::MatchSpec::parse(spec);
-                if (parsed)
+                if (auto name = specs::MatchSpec::extract_name(spec); name.has_value())
                 {
-                    auto name = parsed->name().to_string();
-                    if (!name.empty() && !parsed->name().is_free())
-                    {
-                        names.insert(std::move(name));
-                    }
+                    names.insert(std::move(name).value());
                 }
             }
         }
