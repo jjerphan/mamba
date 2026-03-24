@@ -384,6 +384,12 @@ def build_html_report(df: pd.DataFrame, html_path: Path) -> str:
     # 2.5.0 vs 2.6.0 comparison tables (time and memory).
     wall_cmp_html = ""
     rss_cmp_html = ""
+    wall_tables_html: dict[str, str] = {}
+    wall_tables_md: dict[str, str] = {}
+    rss_tables_html: dict[str, str] = {}
+    rss_tables_md: dict[str, str] = {}
+    net_tables_html: dict[str, str] = {}
+    net_tables_md: dict[str, str] = {}
     if "wall_time_s" in df.columns:
         g = (
             df.groupby(["spec", "cache_state", "binary"])["wall_time_s"]
@@ -428,6 +434,33 @@ def build_html_report(df: pd.DataFrame, html_path: Path) -> str:
                 },
             )
             wall_md = df_to_markdown(wall_md_df)
+            for state in ["cold", "warm"]:
+                state_df = wall_df[wall_df["cache_state"] == state].copy()
+                if state_df.empty:
+                    continue
+                state_df = state_df.drop(columns=["cache_state"])
+                wall_tables_html[state] = build_comparison_table_html(
+                    state_df,
+                    ratio_col="speedup",
+                    headers=[
+                        "Specification",
+                        "2.5.0 wall time (s)",
+                        "2.6.0 wall time (s)",
+                        "Delta wall time (s)",
+                        "Speedup",
+                    ],
+                )
+                wall_tables_md[state] = df_to_markdown(
+                    state_df.rename(
+                        columns={
+                            "spec": "Specification",
+                            "old_wall_s": "2.5.0 wall time (s)",
+                            "new_wall_s": "2.6.0 wall time (s)",
+                            "delta_wall_s": "Delta wall time (s)",
+                            "speedup": "Speedup",
+                        },
+                    ),
+                )
 
     if "peak_rss_bytes" in df.columns:
         h = (
@@ -473,12 +506,41 @@ def build_html_report(df: pd.DataFrame, html_path: Path) -> str:
                 },
             )
             rss_md = df_to_markdown(rss_md_df)
+            for state in ["cold", "warm"]:
+                state_df = rss_df[rss_df["cache_state"] == state].copy()
+                if state_df.empty:
+                    continue
+                state_df = state_df.drop(columns=["cache_state"])
+                rss_tables_html[state] = build_comparison_table_html(
+                    state_df,
+                    ratio_col="rss_ratio_old_new",
+                    headers=[
+                        "Specification",
+                        "2.5.0 peak RSS (MiB)",
+                        "2.6.0 peak RSS (MiB)",
+                        "Delta peak RSS (MiB)",
+                        "Peak RSS reduction",
+                    ],
+                )
+                rss_tables_md[state] = df_to_markdown(
+                    state_df.rename(
+                        columns={
+                            "spec": "Specification",
+                            "old_rss_mib": "2.5.0 peak RSS (MiB)",
+                            "new_rss_mib": "2.6.0 peak RSS (MiB)",
+                            "delta_rss_mib": "Delta peak RSS (MiB)",
+                            "rss_ratio_old_new": "Peak RSS reduction",
+                        },
+                    ),
+                )
 
     # Network I/O comparison table (sent+received).
     net_io_cmp_html = ""
     if "net_bytes_sent" in df.columns and "net_bytes_recv" in df.columns:
+        # Network I/O is only meaningful for cold-cache runs.
+        df_net_cold = df[df["cache_state"] == "cold"].copy()
         ns = (
-            df.groupby(["spec", "cache_state", "binary"])
+            df_net_cold.groupby(["spec", "cache_state", "binary"])
             .agg(
                 net_bytes_sent=("net_bytes_sent", "mean"),
                 net_bytes_recv=("net_bytes_recv", "mean"),
@@ -532,6 +594,33 @@ def build_html_report(df: pd.DataFrame, html_path: Path) -> str:
                 },
             )
             net_io_md = df_to_markdown(net_io_md_df)
+            for state in ["cold", "warm"]:
+                state_df = io_df[io_df["cache_state"] == state].copy()
+                if state_df.empty:
+                    continue
+                state_df = state_df.drop(columns=["cache_state"])
+                net_tables_html[state] = build_comparison_table_html(
+                    state_df,
+                    ratio_col="ratio_io_old_new",
+                    headers=[
+                        "Specification",
+                        "2.5.0 network I/O (MiB)",
+                        "2.6.0 network I/O (MiB)",
+                        "Delta network I/O (MiB)",
+                        "Network I/O reduction",
+                    ],
+                )
+                net_tables_md[state] = df_to_markdown(
+                    state_df.rename(
+                        columns={
+                            "spec": "Specification",
+                            "old_io_mib": "2.5.0 network I/O (MiB)",
+                            "new_io_mib": "2.6.0 network I/O (MiB)",
+                            "delta_io_mib": "Delta network I/O (MiB)",
+                            "ratio_io_old_new": "Network I/O reduction",
+                        },
+                    ),
+                )
 
     # Simple manifest-like info derived from the data.
     meta = {
@@ -546,6 +635,43 @@ def build_html_report(df: pd.DataFrame, html_path: Path) -> str:
     }
     manifest_html = "<pre>" + json.dumps(meta, indent=2) + "</pre>"
 
+    # Prepare plot images so they can be embedded under metric sections.
+    wall_images: dict[str, str] = {}
+    rss_images: dict[str, str] = {}
+    net_images: dict[str, str] = {}
+    if "wall_time_s" in df.columns:
+        wall_images = generate_boxplot_pngs_by_state(
+            df,
+            value_col="wall_time_s",
+            ylabel="Wall time (s)",
+            title_prefix="Wall time per project installation and micromamba version",
+            png_basename="wall_time_boxplot",
+            out_dir=plots_dir,
+        )
+    if "peak_rss_bytes" in df.columns:
+        df_rss = df.copy()
+        df_rss["peak_rss_mib"] = df_rss["peak_rss_bytes"] / (1024 * 1024)
+        rss_images = generate_boxplot_pngs_by_state(
+            df_rss,
+            value_col="peak_rss_mib",
+            ylabel="Peak RSS (MiB)",
+            title_prefix="Peak RSS per project installation and micromamba version",
+            png_basename="peak_rss_boxplot",
+            out_dir=plots_dir,
+        )
+    if "net_bytes_sent" in df.columns and "net_bytes_recv" in df.columns:
+        # Exclude warm-cache network I/O from plots.
+        df_net = df[df["cache_state"] == "cold"].copy()
+        df_net["net_io_mib"] = (df_net["net_bytes_sent"] + df_net["net_bytes_recv"]) / (1024 * 1024)
+        net_images = generate_boxplot_pngs_by_state(
+            df_net,
+            value_col="net_io_mib",
+            ylabel="Network I/O (MiB)",
+            title_prefix="Network I/O per project installation and micromamba version",
+            png_basename="net_io_boxplot",
+            out_dir=plots_dir,
+        )
+
     html_parts: list[str] = [
         "<!DOCTYPE html>",
         "<html>",
@@ -557,6 +683,19 @@ def build_html_report(df: pd.DataFrame, html_path: Path) -> str:
         "'Segoe UI', sans-serif; margin: 1.5rem; }",
         "h1, h2, h3 { font-weight: 600; }",
         "section { margin-bottom: 2rem; }",
+        "table { border-collapse: collapse; width: 100%; max-width: 100%; }",
+        "table th, table td { padding: 0.35rem 0.5rem; }",
+        "section { overflow-x: auto; }",
+        "img {",
+        "  display: block;",
+        "  width: min(100%, 1800px);",
+        "  max-width: 100%;",
+        "  height: auto;",
+        "  margin: 0.75rem 0 1.25rem 0;",
+        "  border: 1px solid #d0d7de;",
+        "  border-radius: 8px;",
+        "  background: #fff;",
+        "}",
         "</style>",
         "</head>",
         "<body>",
@@ -584,10 +723,20 @@ def build_html_report(df: pd.DataFrame, html_path: Path) -> str:
                 "<p>Per (project, cache_state) mean wall time for "
                 "2.5.0/2.6.0, plus absolute delta and speedup ratio "
                 "2.5.0/2.6.0 (when both versions are present).</p>",
-                wall_cmp_html,
-                "</section>",
             ]
         )
+        for state in ["cold", "warm"]:
+            if state in wall_tables_html:
+                html_parts.append(f"<h3>{state.capitalize()} cache</h3>")
+                html_parts.append(wall_tables_html[state])
+        if wall_images:
+            html_parts.append("<h3>Wall time distributions (boxplots)</h3>")
+            for cache_state, fname in sorted(wall_images.items()):
+                html_parts.append(f"<h4>Cache: {cache_state}</h4>")
+                html_parts.append(
+                    f"<img src='{fname}' alt='Wall time boxplot {cache_state}' />",
+                )
+        html_parts.append("</section>")
     if rss_cmp_html:
         html_parts.extend(
             [
@@ -595,84 +744,44 @@ def build_html_report(df: pd.DataFrame, html_path: Path) -> str:
                 "<h2>Peak RSS comparison (MiB)</h2>",
                 "<p>Per (project, cache_state) mean peak RSS for "
                 "2.5.0/2.6.0, plus delta when both versions are present.</p>",
-                rss_cmp_html,
-                "</section>",
             ]
         )
+        for state in ["cold", "warm"]:
+            if state in rss_tables_html:
+                html_parts.append(f"<h3>{state.capitalize()} cache</h3>")
+                html_parts.append(rss_tables_html[state])
+        if rss_images:
+            html_parts.append("<h3>Peak RSS distributions (boxplots)</h3>")
+            for cache_state, fname in sorted(rss_images.items()):
+                html_parts.append(f"<h4>Cache: {cache_state}</h4>")
+                html_parts.append(
+                    f"<img src='{fname}' alt='Peak RSS boxplot {cache_state}' />",
+                )
+        html_parts.append("</section>")
     if net_io_cmp_html:
         html_parts.extend(
             [
                 "<section>",
                 "<h2>Network I/O comparison (MiB)</h2>",
-                "<p>Per (spec, cache_state) mean network bytes (sent + received, "
-                "system-wide during run) for 2.5.0/2.6.0.</p>",
-                net_io_cmp_html,
-                "</section>",
+                "<p>💡 Comparison on warm cache aren't reported because network is not used in this case.</p>",
+                "<p>Per (project, cache_state) mean network bytes (sent + "
+                "received, system-wide during run) for 2.5.0/2.6.0. "
+                "Only cold-cache runs are shown.</p>",
             ]
         )
-
-    # Static matplotlib boxplots: one image per cache_state.
-    if "wall_time_s" in df.columns:
-        wall_images = generate_boxplot_pngs_by_state(
-            df,
-            value_col="wall_time_s",
-            ylabel="Wall time (s)",
-            title_prefix="Wall time per project installation and micromamba version",
-            png_basename="wall_time_boxplot",
-            out_dir=plots_dir,
-        )
-        if wall_images:
-            html_parts.append("<section>")
-            html_parts.append("<h2>Wall time distributions (boxplots)</h2>")
-            for cache_state, fname in sorted(wall_images.items()):
-                html_parts.append(f"<h3>Cache: {cache_state}</h3>")
-                html_parts.append(
-                    f"<img src='{fname}' alt='Wall time boxplot {cache_state}' />",
-                )
-            html_parts.append("</section>")
-
-    if "peak_rss_bytes" in df.columns:
-        df_rss = df.copy()
-        df_rss["peak_rss_mib"] = df_rss["peak_rss_bytes"] / (1024 * 1024)
-        rss_images = generate_boxplot_pngs_by_state(
-            df_rss,
-            value_col="peak_rss_mib",
-            ylabel="Peak RSS (MiB)",
-            title_prefix="Peak RSS per project installation and micromamba version",
-            png_basename="peak_rss_boxplot",
-            out_dir=plots_dir,
-        )
-        if rss_images:
-            html_parts.append("<section>")
-            html_parts.append("<h2>Peak RSS distributions (boxplots)</h2>")
-            for cache_state, fname in sorted(rss_images.items()):
-                html_parts.append(f"<h3>Cache: {cache_state}</h3>")
-                html_parts.append(
-                    f"<img src='{fname}' alt='Peak RSS boxplot {cache_state}' />",
-                )
-            html_parts.append("</section>")
-
-    # Network I/O boxplots (sent + received in MiB).
-    if "net_bytes_sent" in df.columns and "net_bytes_recv" in df.columns:
-        df_net = df.copy()
-        df_net["net_io_mib"] = (df_net["net_bytes_sent"] + df_net["net_bytes_recv"]) / (1024 * 1024)
-        net_images = generate_boxplot_pngs_by_state(
-            df_net,
-            value_col="net_io_mib",
-            ylabel="Network I/O (MiB)",
-            title_prefix="Network I/O per project installation and micromamba version",
-            png_basename="net_io_boxplot",
-            out_dir=plots_dir,
-        )
+        if "cold" in net_tables_html:
+            html_parts.append("<h3>Cold cache</h3>")
+            html_parts.append(net_tables_html["cold"])
+        html_parts.append("<h3>Warm cache</h3>")
+        html_parts.append("<p>Not reported.</p>")
         if net_images:
-            html_parts.append("<section>")
-            html_parts.append("<h2>Network I/O distributions (boxplots)</h2>")
+            html_parts.append("<h3>Network I/O distributions (boxplots)</h3>")
             for cache_state, fname in sorted(net_images.items()):
-                html_parts.append(f"<h3>Cache: {cache_state}</h3>")
+                html_parts.append(f"<h4>Cache: {cache_state}</h4>")
                 html_parts.append(
                     f"<img src='{fname}' alt='Network I/O boxplot {cache_state}' />",
                 )
-            html_parts.append("</section>")
+        html_parts.append("</section>")
 
     # Dependency counts (hard-coded per spec)
     deps_df = pd.DataFrame(
@@ -697,13 +806,45 @@ def build_html_report(df: pd.DataFrame, html_path: Path) -> str:
         md_sections.append(summary_md)
     if wall_md:
         md_sections.append("## Wall time comparison (seconds)")
-        md_sections.append(wall_md)
+        if "cold" in wall_tables_md:
+            md_sections.append("### Cold cache")
+            md_sections.append(wall_tables_md["cold"])
+        if "warm" in wall_tables_md:
+            md_sections.append("### Warm cache")
+            md_sections.append(wall_tables_md["warm"])
+        if wall_images:
+            md_sections.append("### Wall time distributions (boxplots)")
+            for cache_state, fname in sorted(wall_images.items()):
+                md_sections.append(f"#### Cache: {cache_state}")
+                md_sections.append(f"![Wall time boxplot {cache_state}]({fname})")
     if rss_md:
         md_sections.append("## Peak RSS comparison (MiB)")
-        md_sections.append(rss_md)
+        if "cold" in rss_tables_md:
+            md_sections.append("### Cold cache")
+            md_sections.append(rss_tables_md["cold"])
+        if "warm" in rss_tables_md:
+            md_sections.append("### Warm cache")
+            md_sections.append(rss_tables_md["warm"])
+        if rss_images:
+            md_sections.append("### Peak RSS distributions (boxplots)")
+            for cache_state, fname in sorted(rss_images.items()):
+                md_sections.append(f"#### Cache: {cache_state}")
+                md_sections.append(f"![Peak RSS boxplot {cache_state}]({fname})")
     if net_io_md:
         md_sections.append("## Network I/O comparison (MiB)")
-        md_sections.append(net_io_md)
+        md_sections.append(
+            "💡 Comparison on warm cache aren't reported because network is not used in this case.",
+        )
+        if "cold" in net_tables_md:
+            md_sections.append("### Cold cache")
+            md_sections.append(net_tables_md["cold"])
+        md_sections.append("### Warm cache")
+        md_sections.append("Not reported.")
+        if net_images:
+            md_sections.append("### Network I/O distributions (boxplots)")
+            for cache_state, fname in sorted(net_images.items()):
+                md_sections.append(f"#### Cache: {cache_state}")
+                md_sections.append(f"![Network I/O boxplot {cache_state}]({fname})")
     md_path.write_text("\n\n".join(md_sections))
 
     html_parts.extend(["</body>", "</html>"])
