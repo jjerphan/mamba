@@ -709,10 +709,6 @@ def build_html_report(df: pd.DataFrame, html_path: Path) -> str:
         "<h2>Manifest</h2>",
         manifest_html,
         "</section>",
-        "<section>",
-        "<h2>Summary statistics</h2>",
-        summary_html,
-        "</section>",
     ]
 
     if wall_cmp_html:
@@ -763,7 +759,8 @@ def build_html_report(df: pd.DataFrame, html_path: Path) -> str:
             [
                 "<section>",
                 "<h2>Network I/O comparison (MiB)</h2>",
-                "<p>💡 Comparison on warm cache aren't reported because network is not used in this case.</p>",
+                "<p>💡 Comparison on warm cache aren't reported because "
+                "network is not used in this case.</p>",
                 "<p>Per (project, cache_state) mean network bytes (sent + "
                 "received, system-wide during run) for 2.5.0/2.6.0. "
                 "Only cold-cache runs are shown.</p>",
@@ -847,7 +844,16 @@ def build_html_report(df: pd.DataFrame, html_path: Path) -> str:
                 md_sections.append(f"![Network I/O boxplot {cache_state}]({fname})")
     md_path.write_text("\n\n".join(md_sections))
 
-    html_parts.extend(["</body>", "</html>"])
+    html_parts.extend(
+        [
+            "<section>",
+            "<h2>Summary statistics</h2>",
+            summary_html,
+            "</section>",
+            "</body>",
+            "</html>",
+        ]
+    )
     return "\n".join(html_parts)
 
 
