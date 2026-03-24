@@ -142,7 +142,6 @@ def generate_boxplot_pngs_by_state(
                     continue
                 data.append(vals)
                 version = binary_label(binary)
-                run_count = len(vals)
                 labels.append(f"{spec} @ {version}")
                 box_colors.append(version_colors.get(version, default_color))
                 vals_series = pd.Series(vals, dtype=float)
@@ -644,10 +643,13 @@ def build_html_report(df: pd.DataFrame, html_path: Path) -> str:
     # Dependency counts (hard-coded per spec)
     deps_df = pd.DataFrame(
         [
-            {"Spec": "jupyterlab", "Dependencies": 141},
-            {"Spec": "python", "Dependencies": 22},
-            {"Spec": "xtensor", "Dependencies": 6},
-            {"Spec": "scikit-learn", "Dependencies": 33},
+            {"Spec": "jupyterlab", "Dependencies": 140},
+            {"Spec": "jupytergis", "Dependencies": 166},
+            {"Spec": "python", "Dependencies": 21},
+            {"Spec": "xtensor", "Dependencies": 5},
+            {"Spec": "pyarrow", "Dependencies": 87},
+            {"Spec": "scikit-learn", "Dependencies": 32},
+            {"Spec": "tzdata", "Dependencies": 0},
         ]
     )
     deps_md = df_to_markdown(deps_df)

@@ -4,7 +4,9 @@ Micromamba psutil-based benchmark harness.
 
 Runs dry-run installs (multithreaded only) for a matrix of:
   - binaries: MICROMAMBA_OLD, MICROMAMBA_NEW
-  - specs: python, xtensor, jupyterlab (default)
+  - specs: python, xtensor, jupyterlab,
+           scikit-learn, pyarrow, jupytergis,
+           tzdata (default)
   - cache_state: cold (caches cleared) and warm (caches reused)
 
 For each combination it performs:
@@ -35,7 +37,15 @@ CacheState = Literal["cold", "warm"]
 
 
 # Default specs limited to those requested in the psutil plan.
-DEFAULT_SPECS = ["python", "xtensor", "jupyterlab", "scikit-learn"]
+DEFAULT_SPECS = [
+    "python",
+    "xtensor",
+    "jupyterlab",
+    "scikit-learn",
+    "pyarrow",
+    "jupytergis",
+    "tzdata",
+]
 
 
 @dataclass
@@ -308,7 +318,8 @@ def main(argv: list[str]) -> int:
 
     if not args.micromamba_old or not args.micromamba_new:
         print(
-            "ERROR: both --micromamba-old and --micromamba-new (or MICROMAMBA_OLD/NEW) must be set.",
+            "ERROR: both --micromamba-old and --micromamba-new "
+            "(or MICROMAMBA_OLD/NEW) must be set.",
             file=sys.stderr,
         )
         return 1
