@@ -21,6 +21,15 @@ import pandas as pd  # type: ignore[import-untyped]
 import random
 
 BINARY_LABELS = {"old": "2.5.0", "new": "2.6.0"}
+SPEC_DEPENDENCY_COUNTS = {
+    "tzdata": 0,
+    "xtensor": 5,
+    "python": 21,
+    "scikit-learn": 32,
+    "pyarrow": 87,
+    "jupyterlab": 140,
+    "jupytergis": 166,
+}
 
 
 def binary_label(binary: str) -> str:
@@ -33,6 +42,27 @@ def extract_unit(ylabel: str) -> str:
     if start != -1 and end != -1 and end > start + 1:
         return ylabel[start + 1 : end].strip()
     return ylabel.strip()
+
+
+def spec_sort_key(spec: str) -> tuple[int, str]:
+    # Keep unknown specs after known ones, ordered alphabetically.
+    return (SPEC_DEPENDENCY_COUNTS.get(spec, 10**9), spec)
+
+
+def sort_by_spec_and_cache_state(df: pd.DataFrame) -> pd.DataFrame:
+    if "spec" not in df.columns:
+        return df
+    ordered_specs = sorted(df["spec"].astype(str).unique().tolist(), key=spec_sort_key)
+    ordered_df = df.copy()
+    ordered_df["spec"] = pd.Categorical(
+        ordered_df["spec"],
+        categories=ordered_specs,
+        ordered=True,
+    )
+    sort_cols = ["spec"]
+    if "cache_state" in ordered_df.columns:
+        sort_cols.append("cache_state")
+    return ordered_df.sort_values(sort_cols).reset_index(drop=True)
 
 
 def df_to_markdown(df: pd.DataFrame) -> str:
@@ -122,7 +152,7 @@ def generate_boxplot_pngs_by_state(
         if df_sub.empty:
             continue
 
-        specs = sorted(df_sub["spec"].unique().tolist())
+        specs = sorted(df_sub["spec"].unique().tolist(), key=spec_sort_key)
         binaries = sorted(df_sub["binary"].unique().tolist())
 
         data: list[list[float]] = []
@@ -336,6 +366,7 @@ def build_html_report(df: pd.DataFrame, html_path: Path) -> str:
             ["binary", "spec", "cache_state"],
         ).agg(**agg_spec)
         summary_df = summary_table.reset_index()
+        summary_df = sort_by_spec_and_cache_state(summary_df)
         if "peak_rss_bytes_mean" in summary_df.columns:
             summary_df["peak_rss_mib_mean"] = summary_df["peak_rss_bytes_mean"] / (1024 * 1024)
         if "net_bytes_sent_mean" in summary_df.columns:
@@ -373,6 +404,7 @@ def build_html_report(df: pd.DataFrame, html_path: Path) -> str:
             cols.extend(["delta_wall_s", "speedup"])
         if cols:
             wall_df = g.reset_index()[["spec", "cache_state"] + cols]
+            wall_df = sort_by_spec_and_cache_state(wall_df)
             wall_cmp_html = build_comparison_table_html(
                 wall_df,
                 ratio_col="speedup",
@@ -417,6 +449,7 @@ def build_html_report(df: pd.DataFrame, html_path: Path) -> str:
             cols_rss.extend(["delta_rss_mib", "rss_ratio_old_new"])
         if cols_rss:
             rss_df = h.reset_index()[["spec", "cache_state"] + cols_rss]
+            rss_df = sort_by_spec_and_cache_state(rss_df)
             rss_cmp_html = build_comparison_table_html(
                 rss_df,
                 ratio_col="rss_ratio_old_new",
@@ -475,6 +508,7 @@ def build_html_report(df: pd.DataFrame, html_path: Path) -> str:
                     "ratio_io_old_new",
                 ]
             ]
+            io_df = sort_by_spec_and_cache_state(io_df)
             net_io_cmp_html = build_comparison_table_html(
                 io_df,
                 ratio_col="ratio_io_old_new",
@@ -504,7 +538,7 @@ def build_html_report(df: pd.DataFrame, html_path: Path) -> str:
         "micromamba_versions": sorted(
             [binary_label(b) for b in df["binary"].unique().tolist()],
         ),
-        "specs": sorted(df["spec"].unique().tolist()),
+        "specs": sorted(df["spec"].unique().tolist(), key=spec_sort_key),
         "cache_states": sorted(df["cache_state"].unique().tolist()),
         "runs_per_combo": int(
             df.groupby(["binary", "spec", "cache_state"])["run_id"].nunique().max(),
@@ -643,13 +677,8 @@ def build_html_report(df: pd.DataFrame, html_path: Path) -> str:
     # Dependency counts (hard-coded per spec)
     deps_df = pd.DataFrame(
         [
-            {"Spec": "jupyterlab", "Dependencies": 140},
-            {"Spec": "jupytergis", "Dependencies": 166},
-            {"Spec": "python", "Dependencies": 21},
-            {"Spec": "xtensor", "Dependencies": 5},
-            {"Spec": "pyarrow", "Dependencies": 87},
-            {"Spec": "scikit-learn", "Dependencies": 32},
-            {"Spec": "tzdata", "Dependencies": 0},
+            {"Spec": spec, "Dependencies": deps}
+            for spec, deps in sorted(SPEC_DEPENDENCY_COUNTS.items(), key=lambda x: x[1])
         ]
     )
     deps_md = df_to_markdown(deps_df)
