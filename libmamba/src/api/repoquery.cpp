@@ -19,10 +19,24 @@
 
 namespace mamba
 {
+    // These helpers live in `src/api/utils.cpp` (no public header), so we forward-declare them
+    // here to share the same root_packages logic as install/create.
+    std::vector<std::string> extract_package_names_from_specs(const std::vector<std::string>& specs);
+    void add_pip_if_python(std::vector<std::string>& root_packages);
+}
+
+namespace mamba
+{
     namespace
     {
-        auto
-        repoquery_init(Context& ctx, Configuration& config, QueryResultFormat format, bool use_local)
+        auto repoquery_init(
+            Context& ctx,
+            Configuration& config,
+            QueryType type,
+            QueryResultFormat format,
+            bool use_local,
+            const std::vector<std::string>& queries
+        )
         {
             config.at("use_target_prefix_fallback").set_value(true);
             config.at("use_default_prefix_fallback").set_value(true);
@@ -77,7 +91,18 @@ namespace mamba
                 {
                     Console::stream() << "Getting repodata from channels..." << std::endl;
                 }
-                auto exp_load = load_channels(ctx, channel_context, db, package_caches, {});
+
+                // For `repoquery depends`, when sharded repodata is enabled we want to load
+                // only the subset of repodata that is reachable from the query roots,
+                // using the same `root_packages` derivation as install/create.
+                std::vector<std::string> root_packages;
+                if (type == QueryType::Depends && ctx.repodata_use_shards)
+                {
+                    root_packages = extract_package_names_from_specs(queries);
+                    add_pip_if_python(root_packages);
+                }
+
+                auto exp_load = load_channels(ctx, channel_context, db, package_caches, root_packages);
                 if (!exp_load)
                 {
                     throw std::runtime_error(exp_load.error().what());
@@ -189,7 +214,7 @@ namespace mamba
     )
     {
         auto& ctx = config.context();
-        auto db = repoquery_init(ctx, config, format, use_local);
+        auto db = repoquery_init(ctx, config, type, format, use_local, queries);
         return make_repoquery(
             db,
             type,

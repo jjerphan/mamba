@@ -329,6 +329,22 @@ namespace mamba
                     {
                         record.features = msgpack_object_to_string(val_obj);
                     }
+                    else if (key == "license")
+                    {
+                        record.license = msgpack_object_to_string(val_obj);
+                    }
+                    else if (key == "license_family")
+                    {
+                        record.license_family = msgpack_object_to_string(val_obj);
+                    }
+                    else if (key == "timestamp")
+                    {
+                        record.timestamp = static_cast<std::size_t>(msgpack_object_to_uint64(val_obj));
+                    }
+                    else if (key == "subdir")
+                    {
+                        record.subdir = msgpack_object_to_string(val_obj);
+                    }
                     // Ignore unknown fields (they might be present in the data but not needed)
                 }
                 catch (const std::exception& e)
@@ -416,8 +432,8 @@ namespace mamba
         }
         else
         {
-            // For relative URLs, join with repodata URL
-            // url_concat handles slashes automatically, no need for "/" separator
+            // For relative URLs, join with the shard-index URL passed into this Shards
+            // instance. (The caller must provide the shard-index URL, not repodata.json.)
             result = util::url_concat(m_url, shards_base_url_str);
         }
 
@@ -425,6 +441,21 @@ namespace mamba
         if (!util::ends_with(result, "/"))
         {
             result += "/";
+        }
+
+        // Some shard index variants encode `shards_base_url` as a path rooted at
+        // `repodata_shards.msgpack.zst` (the shard index file) instead of the
+        // `repodata_shards/` directory containing individual shard blobs.
+        // If we end up with ".../repodata_shards.msgpack.zst/" here, normalize it to
+        // ".../repodata_shards/" so that appending "<hash>.msgpack.zst" points to
+        // actual shard objects.
+        {
+            constexpr std::string_view shards_index_file = "repodata_shards.msgpack.zst";
+            const std::string suffix = std::string(shards_index_file) + "/";
+            if (util::ends_with(result, suffix))
+            {
+                result = result.substr(0, result.size() - suffix.size()) + "repodata_shards/";
+            }
         }
 
         m_shards_base_url = result;
@@ -757,6 +788,15 @@ namespace mamba
             {
                 mirror_name = m_channel.id();
                 url_path = shard_path_str;
+
+                // When the mirror system doesn't have entries for this channel (e.g.
+                // because `channel.mirror_urls()` is empty), the download layer fails early.
+                // In that case, fall back to downloading from the full shard URL directly.
+                if (!extended_mirrors.has_mirrors(mirror_name))
+                {
+                    mirror_name = "";
+                    url_path = url;
+                }
             }
 
             download::Request request(

@@ -24,6 +24,7 @@
 #include "mamba/solver/libsolv/repo_info.hpp"
 #include "mamba/specs/error.hpp"
 #include "mamba/specs/package_info.hpp"
+#include "mamba/util/url_manip.hpp"
 
 namespace mamba
 {
@@ -231,9 +232,13 @@ namespace mamba
         {
             auto& subdir = subdirs[subdir_idx];
 
-            bool use_shards = ctx.repodata_use_shards
-                              && subdir.metadata().has_up_to_date_shards(ctx.repodata_shards_ttl)
-                              && !root_packages.empty();
+            // When `repodata_use_shards` is enabled and we have `root_packages`, we should try
+            // to load sharded repodata even if shard availability metadata hasn't been marked
+            // "up to date" yet.
+            //
+            // The shard loader itself performs cache checks and refreshes shard availability
+            // when needed, and will fall back to full repodata only if sharded loading fails.
+            bool use_shards = ctx.repodata_use_shards && !root_packages.empty();
 
             if (use_shards)
             {
@@ -339,9 +344,7 @@ namespace mamba
             std::vector<SubdirIndexLoader*> subdirs_needing_index;
             for (auto& s : subdirs)
             {
-                bool use_shards = ctx.repodata_use_shards
-                                  && s.metadata().has_up_to_date_shards(ctx.repodata_shards_ttl)
-                                  && !root_packages.empty();
+                bool use_shards = ctx.repodata_use_shards && !root_packages.empty();
                 if (!use_shards)
                 {
                     subdirs_needing_index.push_back(&s);
@@ -434,9 +437,7 @@ namespace mamba
             for (std::size_t i = 0; i < subdirs.size(); ++i)
             {
                 auto& subdir = subdirs[i];
-                bool use_shards = ctx.repodata_use_shards
-                                  && subdir.metadata().has_up_to_date_shards(ctx.repodata_shards_ttl)
-                                  && !root_packages.empty();
+                bool use_shards = ctx.repodata_use_shards && !root_packages.empty();
 
                 // Skip if this subdir was already loaded as part of a sharded same-channel load.
                 if (loaded_subdirs_with_shards.contains(subdir.name()))
@@ -681,9 +682,85 @@ namespace mamba
                 }
                 auto si = std::move(sidx_result.value().value());
                 std::string sdir_url = subdirs[j].repodata_url().str();
+
+                // `Shards` expects `url` to be the *shard index* URL
+                // (`repodata_shards.msgpack.zst`), not the repodata.json URL.
+                // Derive shard index URL from the mirror base used by shard index requests.
+                std::string shard_index_url;
+                if (ctx.mirrors.has_mirrors(subdirs[j].channel_id()))
+                {
+                    auto mirrors = ctx.mirrors.get_mirrors(subdirs[j].channel_id());
+                    std::string chosen_mirror_base;
+                    bool prefer_prefix_dev = false;
+
+                    for (const auto& mirror_ptr : mirrors)
+                    {
+                        if (!mirror_ptr)
+                        {
+                            continue;
+                        }
+
+                        // `MirrorID::to_string()` includes a wrapper like `MirrorID <...>`.
+                        // Extract the inner URL value for URL concatenation.
+                        const std::string mirror_id_display = mirror_ptr->id().to_string();
+                        std::string mirror_base;
+                        const auto lt = mirror_id_display.find('<');
+                        const auto gt = mirror_id_display.rfind('>');
+                        if (lt != std::string::npos && gt != std::string::npos && gt > lt + 1)
+                        {
+                            mirror_base = mirror_id_display.substr(lt + 1, gt - lt - 1);
+                        }
+                        else
+                        {
+                            mirror_base = mirror_id_display;
+                        }
+
+                        if (chosen_mirror_base.empty())
+                        {
+                            chosen_mirror_base = mirror_base;
+                            prefer_prefix_dev = (mirror_base.find("prefix.dev") != std::string::npos);
+                        }
+                        else if (mirror_base.find("packages.prefix.dev") != std::string::npos)
+                        {
+                            chosen_mirror_base = mirror_base;
+                            prefer_prefix_dev = true;
+                        }
+                        else if (!prefer_prefix_dev
+                                 && (mirror_base.find("prefix.dev") != std::string::npos))
+                        {
+                            chosen_mirror_base = mirror_base;
+                            prefer_prefix_dev = true;
+                        }
+
+                        if (prefer_prefix_dev
+                            && mirror_base.find("packages.prefix.dev") != std::string::npos)
+                        {
+                            break;
+                        }
+                    }
+
+                    if (!chosen_mirror_base.empty())
+                    {
+                        // shard_index_url_path is already `platform/repodata_shards.msgpack.zst`
+                        shard_index_url = util::url_concat(
+                            chosen_mirror_base,
+                            subdirs[j].shard_index_url_path()
+                        );
+                    }
+                }
+                if (shard_index_url.empty())
+                {
+                    // Fallback: best-effort derivation from the channel's repodata URL host.
+                    shard_index_url = util::url_concat(
+                        subdirs[j].channel().platform_url(subdirs[j].platform()).str(),
+                        "repodata_shards.msgpack.zst"
+                    );
+                }
+                const std::string shards_url_key = shard_index_url.empty() ? sdir_url
+                                                                           : shard_index_url;
                 all_shards.emplace_back(
                     std::move(si),
-                    sdir_url,
+                    shards_url_key,
                     subdirs[j].channel(),
                     ctx.authentication_info(),
                     ctx.remote_fetch_params,
@@ -691,6 +768,7 @@ namespace mamba
                     std::cref(ctx.mirrors)
                 );
                 url_to_subdir_idx[sdir_url] = j;
+                url_to_subdir_idx[shards_url_key] = j;
             }
         }
 

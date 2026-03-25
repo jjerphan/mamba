@@ -19,6 +19,7 @@
 #include "mamba/core/context.hpp"
 #include "mamba/core/package_cache.hpp"
 #include "mamba/core/prefix_data.hpp"
+#include "mamba/core/query.hpp"
 #include "mamba/core/subdir_index.hpp"
 #include "mamba/core/transaction.hpp"
 #include "mamba/core/util.hpp"
@@ -416,6 +417,59 @@ TEST_CASE(
 
     auto result = load_channels(ctx, channel_context, db, package_caches, { "python", "numpy" });
     REQUIRE(result.has_value());
+}
+
+TEST_CASE(
+    "Sharded repodata - repoquery depends output consistency",
+    "[mamba::core][sharded][.integration][!mayfail]"
+)
+{
+    auto& ctx = mambatests::context();
+    ctx.channels = { "https://prefix.dev/conda-forge" };
+    ctx.offline = false;
+    const bool original_use_shards = ctx.repodata_use_shards;
+    on_scope_exit restore_settings{ [&] { ctx.repodata_use_shards = original_use_shards; } };
+
+    // Use a temp directory for package cache to ensure a writable path (required for shard index
+    // and shard caching in CI environments where default pkgs_dirs may not be writable)
+    const auto tmp_dir = TemporaryDirectory();
+    ctx.pkgs_dirs = { tmp_dir.path() / "pkgs" };
+    create_cache_dir(ctx.pkgs_dirs.front());
+
+    ChannelContext channel_context = ChannelContext::make_conda_compatible(ctx);
+
+    const std::string query = "yaml";
+    const std::vector<std::string> root_packages = extract_root_packages({ query });
+    REQUIRE(!root_packages.empty());
+
+    const auto match_parser = ctx.experimental_matchspec_parsing
+                                  ? solver::libsolv::MatchSpecParser::Mamba
+                                  : solver::libsolv::MatchSpecParser::Libsolv;
+
+    MultiPackageCache package_caches{ ctx.pkgs_dirs, ctx.validation_params };
+
+    // Flat repodata path
+    ctx.repodata_use_shards = false;
+    solver::libsolv::Database db_flat{ channel_context.params(), { match_parser } };
+    auto flat_loaded = load_channels(ctx, channel_context, db_flat, package_caches);
+    REQUIRE(flat_loaded.has_value());
+
+    // Sharded repodata path (expected to load via `root_packages`)
+    ctx.repodata_use_shards = true;
+    solver::libsolv::Database db_sharded{ channel_context.params(), { match_parser } };
+    auto sharded_loaded = load_channels(ctx, channel_context, db_sharded, package_caches, root_packages);
+    REQUIRE(sharded_loaded.has_value());
+
+    for (const bool tree : { false, true })
+    {
+        auto res_flat = Query::depends(db_flat, query, tree);
+        auto res_sharded = Query::depends(db_sharded, query, tree);
+
+        REQUIRE(!res_flat.empty());
+        REQUIRE(!res_sharded.empty());
+
+        REQUIRE(res_flat.json().dump(4) == res_sharded.json().dump(4));
+    }
 }
 
 TEST_CASE("Sharded repodata - solver results consistency", "[mamba::core][sharded][.integration][!mayfail]")

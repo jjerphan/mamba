@@ -66,10 +66,18 @@ namespace mamba
             {
                 auto attrs = [](const auto& pkg)
                 {
-                    return std::tuple<decltype(pkg.name) const&, specs::Version>(
+                    // Include build_number/build_string so we deterministically pick a single
+                    // "latest" package even when multiple builds share the same version.
+                    return std::tuple<
+                        decltype(pkg.name) const&,
+                        specs::Version,
+                        decltype(pkg.build_number) const&,
+                        decltype(pkg.build_string) const&>(
                         pkg.name,
                         // Failed parsing last
-                        specs::Version::parse(pkg.version).value_or(specs::Version())
+                        specs::Version::parse(pkg.version).value_or(specs::Version()),
+                        pkg.build_number,
+                        pkg.build_string
                     );
                 };
                 return attrs(*lhs) < attrs(*rhs);
