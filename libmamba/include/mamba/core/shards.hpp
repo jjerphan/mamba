@@ -56,7 +56,8 @@ namespace mamba
             download::RemoteFetchParams remote_fetch_params,
             // 0 means: auto; value is normalized with normalize_to_affinity_concurrency().
             std::size_t download_threads = 0,
-            std::optional<std::reference_wrapper<const download::mirror_map>> mirrors = std::nullopt
+            std::optional<std::reference_wrapper<const download::mirror_map>> mirrors = std::nullopt,
+            std::optional<std::string> env_python_minor = std::nullopt
         );
 
         /** Return the names of all packages available in this shard collection. */
@@ -118,6 +119,9 @@ namespace mamba
 
         /** Optional base mirrors for channel-based downloads. */
         std::optional<std::reference_wrapper<const download::mirror_map>> m_mirrors;
+
+        /** Optional installed environment Python major.minor (e.g. "3.12"). */
+        std::optional<std::string> m_env_python_minor;
 
         /** Visited shards, keyed by package name. */
         std::map<std::string, ShardDict> m_visited;

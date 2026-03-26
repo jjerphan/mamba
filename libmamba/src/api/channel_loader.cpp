@@ -5,9 +5,12 @@
 // The full license is in the file LICENSE, distributed with this software.
 
 #include <algorithm>
+#include <fstream>
 #include <optional>
 #include <set>
 #include <sstream>
+
+#include <nlohmann/json.hpp>
 
 #include "mamba/api/channel_loader.hpp"
 #include "mamba/core/channel_context.hpp"
@@ -29,6 +32,54 @@ namespace mamba
 {
     namespace
     {
+        auto installed_python_minor_for_prefix(Context& ctx) -> std::optional<std::string>
+        {
+            const auto conda_meta = ctx.prefix_params.target_prefix / "conda-meta";
+            if (!fs::exists(conda_meta) || !fs::is_directory(conda_meta))
+            {
+                return std::nullopt;
+            }
+
+            for (const auto& entry : fs::directory_iterator(conda_meta))
+            {
+                if (!entry.is_regular_file() || entry.path().extension() != ".json")
+                {
+                    continue;
+                }
+                std::ifstream infile(entry.path());
+                if (!infile.is_open())
+                {
+                    continue;
+                }
+                nlohmann::json j;
+                try
+                {
+                    infile >> j;
+                }
+                catch (const std::exception&)
+                {
+                    continue;
+                }
+                if (!j.is_object() || j.value("name", "") != "python")
+                {
+                    continue;
+                }
+                const std::string version = j.value("version", "");
+                auto dot = version.find('.');
+                if (dot == std::string::npos)
+                {
+                    continue;
+                }
+                auto second_dot = version.find('.', dot + 1);
+                if (second_dot == std::string::npos)
+                {
+                    return version;
+                }
+                return version.substr(0, second_dot);
+            }
+            return std::nullopt;
+        }
+
         auto create_repo_from_pkgs_dir(
             const Context& ctx,
             ChannelContext& channel_context,
@@ -661,6 +712,12 @@ namespace mamba
         LOG_DEBUG << "Shard index fetched for " << subdir.name();
         const auto& channel = subdir.channel();
         std::string current_repodata_url = subdir.repodata_url().str();
+        const auto env_python_minor = installed_python_minor_for_prefix(ctx);
+        if (env_python_minor.has_value())
+        {
+            LOG_DEBUG << "Shard prefilter enabled with installed python minor "
+                      << env_python_minor.value();
+        }
 
         // For all subdirs sharing the same channel URL, fetch their shard indices and build
         //    a Shards instance per subdir; collect them into a RepodataSubset.
@@ -693,7 +750,8 @@ namespace mamba
                     ctx.authentication_info(),
                     ctx.remote_fetch_params,
                     normalize_to_affinity_concurrency(static_cast<int>(ctx.repodata_shards_threads)),
-                    std::cref(ctx.mirrors)
+                    std::cref(ctx.mirrors),
+                    env_python_minor
                 );
                 url_to_subdir_idx[sdir_url] = j;
             }

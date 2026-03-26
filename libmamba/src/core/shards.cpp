@@ -25,6 +25,7 @@
 #include "mamba/core/util.hpp"
 #include "mamba/download/downloader.hpp"
 #include "mamba/fs/filesystem.hpp"
+#include "mamba/specs/match_spec.hpp"
 #include "mamba/specs/version.hpp"
 #include "mamba/util/cryptography.hpp"
 #include "mamba/util/encoding.hpp"
@@ -337,6 +338,63 @@ namespace mamba
 
             return record;
         }
+
+        auto dependency_matches_env_python_minor(
+            const std::string& dependency_spec,
+            const specs::Version& env_python_version
+        ) -> bool
+        {
+            auto maybe_name = specs::MatchSpec::extract_name(dependency_spec);
+            if (!maybe_name.has_value() || maybe_name.value() != "python")
+            {
+                return true;
+            }
+            auto maybe_match_spec = specs::MatchSpec::parse(dependency_spec);
+            if (!maybe_match_spec.has_value())
+            {
+                return true;
+            }
+            return maybe_match_spec.value().version().contains(env_python_version);
+        }
+
+        auto raw_msgpack_record_matches_env_python_minor(
+            const msgpack_object& raw_record_obj,
+            const specs::Version& env_python_version
+        ) -> bool
+        {
+            if (raw_record_obj.type != MSGPACK_OBJECT_MAP)
+            {
+                return true;
+            }
+            for (std::uint32_t i = 0; i < raw_record_obj.via.map.size; ++i)
+            {
+                const msgpack_object& key_obj = raw_record_obj.via.map.ptr[i].key;
+                const msgpack_object& val_obj = raw_record_obj.via.map.ptr[i].val;
+                std::string key;
+                try
+                {
+                    key = msgpack_object_to_string(key_obj);
+                }
+                catch (const std::exception&)
+                {
+                    continue;
+                }
+                if (key != "depends")
+                {
+                    continue;
+                }
+                const auto depends = msgpack_object_to_string_array(val_obj);
+                for (const auto& dep : depends)
+                {
+                    if (!dependency_matches_env_python_minor(dep, env_python_version))
+                    {
+                        return false;
+                    }
+                }
+                return true;
+            }
+            return true;
+        }
     }
 
     /******************
@@ -350,7 +408,8 @@ namespace mamba
         specs::AuthenticationDataBase auth_info,
         download::RemoteFetchParams remote_fetch_params,
         std::size_t download_threads,
-        std::optional<std::reference_wrapper<const download::mirror_map>> mirrors
+        std::optional<std::reference_wrapper<const download::mirror_map>> mirrors,
+        std::optional<std::string> env_python_minor
     )
         : m_shards_index(std::move(shards_index))
         , m_url(std::move(url))
@@ -359,6 +418,7 @@ namespace mamba
         , m_remote_fetch_params(std::move(remote_fetch_params))
         , m_download_threads(normalize_to_affinity_concurrency(static_cast<int>(download_threads)))
         , m_mirrors(std::move(mirrors))
+        , m_env_python_minor(std::move(env_python_minor))
         , m_pkgs_cache_root(fs::u8path(util::user_cache_dir()) / "conda" / "pkgs")
         , m_shard_cache_dir(m_pkgs_cache_root / "cache" / "shards")
     {
@@ -830,6 +890,16 @@ namespace mamba
         msgpack_unpacked unpacked = {};
         try
         {
+            std::optional<specs::Version> env_python_version = std::nullopt;
+            if (m_env_python_minor.has_value())
+            {
+                auto maybe_env_python_version = specs::Version::parse(m_env_python_minor.value());
+                if (maybe_env_python_version.has_value())
+                {
+                    env_python_version = maybe_env_python_version.value();
+                }
+            }
+
             size_t offset = 0;
             msgpack_unpack_return ret = msgpack_unpack_next(
                 &unpacked,
@@ -851,13 +921,23 @@ namespace mamba
             const msgpack_object& obj = unpacked.data;
             ShardDict shard;
 
-            auto parse_package_records = [](const msgpack_object& map_obj,
-                                            std::map<std::string, ShardPackageRecord>& target_map)
+            auto parse_package_records = [&, this](
+                                             const msgpack_object& map_obj,
+                                             std::map<std::string, ShardPackageRecord>& target_map
+                                         )
             {
                 for (std::uint32_t k = 0; k < map_obj.via.map.size; ++k)
                 {
                     try
                     {
+                        if (env_python_version.has_value()
+                            && !raw_msgpack_record_matches_env_python_minor(
+                                map_obj.via.map.ptr[k].val,
+                                env_python_version.value()
+                            ))
+                        {
+                            continue;
+                        }
                         std::string pkg_filename = msgpack_object_to_string(map_obj.via.map.ptr[k].key);
                         ShardPackageRecord record = parse_shard_package_record(
                             map_obj.via.map.ptr[k].val
