@@ -278,7 +278,8 @@ namespace mamba
             std::size_t subdir_idx,
             std::set<std::string>& loaded_subdirs_with_shards,
             const SubdirDownloadParams& subdir_params,
-            const std::vector<solver::libsolv::Priorities>& priorities
+            const std::vector<solver::libsolv::Priorities>& priorities,
+            std::optional<std::string> requested_python_minor
         )
         {
             auto& subdir = subdirs[subdir_idx];
@@ -296,7 +297,8 @@ namespace mamba
                     subdirs,
                     subdir_idx,
                     loaded_subdirs_with_shards,
-                    priorities
+                    priorities,
+                    requested_python_minor
                 );
 
                 if (!res)
@@ -477,7 +479,8 @@ namespace mamba
             const std::vector<solver::libsolv::Priorities>& priorities,
             const SubdirDownloadParams& subdir_params,
             bool is_retry,
-            std::vector<mamba_error>& error_list
+            std::vector<mamba_error>& error_list,
+            std::optional<std::string> requested_python_minor
         )
         {
             std::set<std::string> loaded_subdirs_with_shards;
@@ -518,7 +521,8 @@ namespace mamba
                     i,
                     loaded_subdirs_with_shards,
                     subdir_params,
-                    priorities
+                    priorities,
+                    requested_python_minor
                 );
 
                 if (result)
@@ -684,7 +688,8 @@ namespace mamba
         std::vector<SubdirIndexLoader>& subdirs,
         std::size_t subdir_idx,
         std::set<std::string>& loaded_subdirs_with_shards,
-        const std::vector<solver::libsolv::Priorities>& priorities
+        const std::vector<solver::libsolv::Priorities>& priorities,
+        std::optional<std::string> requested_python_minor
     ) -> expected_t<solver::libsolv::RepoInfo>
     {
         auto& subdir = subdirs[subdir_idx];
@@ -713,11 +718,16 @@ namespace mamba
         LOG_DEBUG << "Shard index fetched for " << subdir.name();
         const auto& channel = subdir.channel();
         std::string current_repodata_url = subdir.repodata_url().str();
-        const auto env_python_minor = installed_python_minor_for_prefix(ctx);
+        const bool python_minor_from_user_spec = requested_python_minor.has_value();
+        const auto env_python_minor = python_minor_from_user_spec
+                                          ? std::move(requested_python_minor)
+                                          : installed_python_minor_for_prefix(ctx);
         if (env_python_minor.has_value())
         {
-            LOG_DEBUG << "Shard prefilter enabled with installed python minor "
-                      << env_python_minor.value();
+            LOG_DEBUG << "Shard prefilter enabled with python minor " << env_python_minor.value()
+                      << " (source="
+                      << (python_minor_from_user_spec ? "user_spec" : "installed_or_fallback")
+                      << ")";
         }
 
         // For all subdirs sharing the same channel URL, fetch their shard indices and build
@@ -804,7 +814,8 @@ namespace mamba
             solver::libsolv::Database& database,
             MultiPackageCache& package_caches,
             const std::vector<std::string>& root_packages,
-            bool is_retry
+            bool is_retry,
+            std::optional<std::string> requested_python_minor
         )
         {
             std::vector<SubdirIndexLoader> subdirs;
@@ -851,7 +862,8 @@ namespace mamba
                 priorities,
                 subdir_params,
                 is_retry,
-                error_list
+                error_list,
+                requested_python_minor
             );
 
             if (loading_failed)
@@ -867,7 +879,8 @@ namespace mamba
                         database,
                         package_caches,
                         root_packages,
-                        retry
+                        retry,
+                        requested_python_minor
                     );
                 }
                 error_list.emplace_back(
@@ -886,11 +899,20 @@ namespace mamba
         ChannelContext& channel_context,
         solver::libsolv::Database& database,
         MultiPackageCache& package_caches,
-        const std::vector<std::string>& root_packages
+        const std::vector<std::string>& root_packages,
+        std::optional<std::string> requested_python_minor
     ) -> expected_t<void, mamba_aggregated_error>
     {
         bool retry = false;
-        return load_channels_impl(ctx, channel_context, database, package_caches, root_packages, retry);
+        return load_channels_impl(
+            ctx,
+            channel_context,
+            database,
+            package_caches,
+            root_packages,
+            retry,
+            std::move(requested_python_minor)
+        );
     }
 
     void init_channels(Context& context, ChannelContext& channel_context)

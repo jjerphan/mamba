@@ -4,6 +4,8 @@
 //
 // The full license is in the file LICENSE, distributed with this software.
 
+#include <cctype>
+
 #include <fmt/format.h>
 
 #include "mamba/api/channel_loader.hpp"
@@ -186,7 +188,56 @@ namespace mamba
             add_pip_if_python(root_packages);
         }
 
-        auto exp_loaded = load_channels(ctx, channel_context, db, package_caches, root_packages);
+        const auto requested_python_minor = [&raw_update_specs]() -> std::optional<std::string>
+        {
+            for (const auto& spec : raw_update_specs)
+            {
+                auto maybe_name = specs::MatchSpec::extract_name(spec);
+                if (!maybe_name.has_value() || maybe_name.value() != "python")
+                {
+                    continue;
+                }
+                for (std::size_t i = 0; (i + 2) < spec.size(); ++i)
+                {
+                    const unsigned char c0 = static_cast<unsigned char>(spec[i]);
+                    const unsigned char c1 = static_cast<unsigned char>(spec[i + 1]);
+                    const unsigned char c2 = static_cast<unsigned char>(spec[i + 2]);
+                    if (!std::isdigit(c0) || c1 != '.' || !std::isdigit(c2))
+                    {
+                        continue;
+                    }
+                    std::size_t j = i;
+                    while (j < spec.size() && std::isdigit(static_cast<unsigned char>(spec[j])))
+                    {
+                        ++j;
+                    }
+                    if (j >= spec.size() || spec[j] != '.')
+                    {
+                        continue;
+                    }
+                    std::size_t k = j + 1;
+                    while (k < spec.size() && std::isdigit(static_cast<unsigned char>(spec[k])))
+                    {
+                        ++k;
+                    }
+                    if (k == j + 1)
+                    {
+                        continue;
+                    }
+                    return spec.substr(i, k - i);
+                }
+            }
+            return std::nullopt;
+        }();
+
+        auto exp_loaded = load_channels(
+            ctx,
+            channel_context,
+            db,
+            package_caches,
+            root_packages,
+            requested_python_minor
+        );
         if (!exp_loaded)
         {
             throw std::runtime_error(exp_loaded.error().what());
