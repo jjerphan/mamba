@@ -4,9 +4,7 @@ Micromamba psutil-based benchmark harness.
 
 Runs dry-run installs (multithreaded only) for a matrix of:
   - binaries: MICROMAMBA_OLD, MICROMAMBA_NEW
-  - specs: python, xtensor, jupyterlab,
-           scikit-learn, pyarrow, jupytergis,
-           tzdata (default)
+  - specs: tzdata, xtensor, python, scikit-learn, pyarrow, jupyterlab, jupytergis, skore
   - cache_state: cold (caches cleared) and warm (caches reused)
 
 For each combination it performs:
@@ -38,13 +36,14 @@ CacheState = Literal["cold", "warm"]
 
 # Default specs limited to those requested in the psutil plan.
 DEFAULT_SPECS = [
-    "python",
+    "tzdata",
     "xtensor",
-    "jupyterlab",
+    "python",
     "scikit-learn",
     "pyarrow",
+    "jupyterlab",
     "jupytergis",
-    "tzdata",
+    "skore",
 ]
 
 

@@ -29,6 +29,7 @@ SPEC_DEPENDENCY_COUNTS = {
     "pyarrow": 87,
     "jupyterlab": 140,
     "jupytergis": 166,
+    "skore": 244,
 }
 
 
