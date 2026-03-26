@@ -34,10 +34,11 @@ namespace mamba
     {
         auto installed_python_minor_for_prefix(Context& ctx) -> std::optional<std::string>
         {
+            constexpr std::string_view fallback_python_minor = "3.14";
             const auto conda_meta = ctx.prefix_params.target_prefix / "conda-meta";
             if (!fs::exists(conda_meta) || !fs::is_directory(conda_meta))
             {
-                return std::nullopt;
+                return std::string(fallback_python_minor);
             }
 
             for (const auto& entry : fs::directory_iterator(conda_meta))
@@ -77,7 +78,7 @@ namespace mamba
                 }
                 return version.substr(0, second_dot);
             }
-            return std::nullopt;
+            return std::string(fallback_python_minor);
         }
 
         auto create_repo_from_pkgs_dir(
