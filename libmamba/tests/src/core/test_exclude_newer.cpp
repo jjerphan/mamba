@@ -34,7 +34,14 @@ namespace
         SECTION("date-only values use the start of the next UTC day")
         {
             REQUIRE(resolve_exclude_newer_cutoff("2026-04-01", now) == 1'775'088'000);
-            REQUIRE(resolve_exclude_newer_cutoff("2026-01-31", now) == 1'769'904'000);
+        }
+
+        SECTION("date-only values roll over at month and year boundaries")
+        {
+            REQUIRE(resolve_exclude_newer_cutoff("2026-01-31", now) == 1'769'904'000);  // 2026-02-01
+            REQUIRE(resolve_exclude_newer_cutoff("2025-02-28", now) == 1'740'787'200);  // 2025-03-01
+            REQUIRE(resolve_exclude_newer_cutoff("2024-02-29", now) == 1'709'251'200);  // 2024-03-01
+            REQUIRE(resolve_exclude_newer_cutoff("2025-12-31", now) == 1'767'225'600);  // 2026-01-01
         }
 
         SECTION("datetimes resolve to absolute instants")
