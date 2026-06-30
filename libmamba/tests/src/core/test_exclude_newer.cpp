@@ -34,6 +34,7 @@ namespace
         SECTION("date-only values use the start of the next UTC day")
         {
             REQUIRE(resolve_exclude_newer_cutoff("2026-04-01", now) == 1'775'088'000);
+            REQUIRE(resolve_exclude_newer_cutoff("2026-01-31", now) == 1'769'904'000);
         }
 
         SECTION("datetimes resolve to absolute instants")

@@ -6,8 +6,9 @@
 
 #include <cctype>
 #include <charconv>
-#include <ctime>
+#include <chrono>
 #include <optional>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 
@@ -18,6 +19,30 @@ namespace mamba
 {
     namespace
     {
+        // Disambiguate the char overload for use with strip_if/lstrip_if templates.
+        constexpr auto is_space = static_cast<bool (*)(char)>(util::is_space);
+
+        using CutoffInstant = std::chrono::sys_seconds;
+        using SysTime = std::chrono::sys_time<std::chrono::seconds>;
+
+        [[nodiscard]] auto to_unix_seconds(CutoffInstant instant) -> std::uint64_t
+        {
+            return static_cast<std::uint64_t>(instant.time_since_epoch().count());
+        }
+
+        template <typename T>
+        [[nodiscard]] auto parse_chrono(std::string_view value, const char* fmt) -> std::optional<T>
+        {
+            std::istringstream stream{ std::string(value) };
+            T out{};
+            stream >> std::chrono::parse(fmt, out);
+            if (stream.fail() || stream.peek() != std::istringstream::traits_type::eof())
+            {
+                return std::nullopt;
+            }
+            return out;
+        }
+
         [[nodiscard]] auto equals_ci(std::string_view value, std::string_view expected) -> bool
         {
             return value.size() == expected.size()
@@ -53,9 +78,9 @@ namespace mamba
             return number;
         }
 
-        [[nodiscard]] auto parse_fixed_uint(std::string_view value) -> std::optional<int>
+        [[nodiscard]] auto parse_fixed_uint(std::string_view value) -> std::optional<std::uint64_t>
         {
-            int number = 0;
+            std::uint64_t number = 0;
             const auto [ptr, ec] = std::from_chars(value.data(), value.data() + value.size(), number);
             if (ec != std::errc() || ptr != value.data() + value.size())
             {
@@ -64,21 +89,18 @@ namespace mamba
             return number;
         }
 
-        [[nodiscard]] auto parse_plain_seconds(std::string_view value) -> std::optional<std::uint64_t>
+        [[nodiscard]] auto parse_plain_seconds(std::string_view value)
+            -> std::optional<std::chrono::seconds>
         {
-            std::uint64_t seconds = 0;
-            const auto* begin = value.data();
-            const auto* end = begin + value.size();
-            const auto [ptr, ec] = std::from_chars(begin, end, seconds);
-            if (ec != std::errc() || ptr != end)
+            if (auto seconds = parse_fixed_uint(value))
             {
-                return std::nullopt;
+                return std::chrono::seconds{ static_cast<std::chrono::seconds::rep>(*seconds) };
             }
-            return seconds;
+            return std::nullopt;
         }
 
         [[nodiscard]] auto parse_compact_duration_seconds(std::string_view value)
-            -> std::optional<std::uint64_t>
+            -> std::optional<std::chrono::seconds>
         {
             auto remaining = value;
             const auto amount = parse_uint_prefix(remaining);
@@ -86,10 +108,7 @@ namespace mamba
             {
                 return std::nullopt;
             }
-            while (!remaining.empty() && util::is_space(remaining.front()))
-            {
-                remaining.remove_prefix(1);
-            }
+            remaining = util::lstrip_if(remaining, is_space);
             if (remaining.size() != 1)
             {
                 return std::nullopt;
@@ -97,22 +116,28 @@ namespace mamba
             switch (std::tolower(static_cast<unsigned char>(remaining.front())))
             {
                 case 'w':
-                    return *amount * 604800;
+                    return std::chrono::seconds{
+                        static_cast<std::chrono::seconds::rep>(*amount * 604800)
+                    };
                 case 'd':
-                    return *amount * 86400;
+                    return std::chrono::seconds{
+                        static_cast<std::chrono::seconds::rep>(*amount * 86400)
+                    };
                 case 'h':
-                    return *amount * 3600;
+                    return std::chrono::seconds{
+                        static_cast<std::chrono::seconds::rep>(*amount * 3600)
+                    };
                 case 'm':
-                    return *amount * 60;
+                    return std::chrono::seconds{ static_cast<std::chrono::seconds::rep>(*amount * 60) };
                 case 's':
-                    return *amount;
+                    return std::chrono::seconds{ static_cast<std::chrono::seconds::rep>(*amount) };
                 default:
                     return std::nullopt;
             }
         }
 
         [[nodiscard]] auto parse_iso8601_duration_seconds(std::string_view value)
-            -> std::optional<std::uint64_t>
+            -> std::optional<std::chrono::seconds>
         {
             if (value.empty() || std::tolower(static_cast<unsigned char>(value.front())) != 'p')
             {
@@ -152,7 +177,7 @@ namespace mamba
                 }
                 remaining.remove_prefix(digits + 1);
                 has_component = true;
-                total += static_cast<std::uint64_t>(*amount) * multiplier;
+                total += *amount * multiplier;
                 return true;
             };
 
@@ -180,11 +205,11 @@ namespace mamba
             {
                 throw invalid_exclude_newer(value);
             }
-            return total;
+            return std::chrono::seconds{ static_cast<std::chrono::seconds::rep>(total) };
         }
 
         [[nodiscard]] auto parse_duration_seconds(std::string_view value)
-            -> std::optional<std::uint64_t>
+            -> std::optional<std::chrono::seconds>
         {
             if (auto seconds = parse_plain_seconds(value))
             {
@@ -197,44 +222,24 @@ namespace mamba
             return parse_compact_duration_seconds(value);
         }
 
-        [[nodiscard]] auto timegm_utc(std::tm tm) -> std::time_t
+        [[nodiscard]] auto parse_date_only(std::string_view value) -> std::optional<CutoffInstant>
         {
-#if defined(_WIN32)
-            return _mkgmtime(&tm);
-#else
-            return timegm(&tm);
-#endif
-        }
-
-        [[nodiscard]] auto parse_date_only_next_utc_day(std::string_view value)
-            -> std::optional<std::uint64_t>
-        {
-            if (value.size() != 10 || value[4] != '-' || value[7] != '-')
+            if (value.size() != 10)
             {
                 return std::nullopt;
             }
 
-            const auto year = parse_fixed_uint(value.substr(0, 4));
-            const auto month = parse_fixed_uint(value.substr(5, 2));
-            const auto day = parse_fixed_uint(value.substr(8, 2));
-            if (!year || !month || !day)
+            const auto day = parse_chrono<std::chrono::sys_days>(value, "%F");
+            if (!day)
             {
                 return std::nullopt;
             }
 
-            std::tm tm = {};
-            tm.tm_year = *year - 1900;
-            tm.tm_mon = *month - 1;
-            tm.tm_mday = *day + 1;
-            tm.tm_hour = 0;
-            tm.tm_min = 0;
-            tm.tm_sec = 0;
-            tm.tm_isdst = 0;
-            return static_cast<std::uint64_t>(timegm_utc(tm));
+            // Conda date-only semantics: exclusive upper bound at the start of the next UTC day.
+            return CutoffInstant{ *day + std::chrono::days{ 1 } };
         }
 
-        [[nodiscard]] auto parse_datetime_timestamp(std::string_view value)
-            -> std::optional<std::uint64_t>
+        [[nodiscard]] auto parse_datetime(std::string_view value) -> std::optional<CutoffInstant>
         {
             if (value.size() < 19 || value[4] != '-' || value[7] != '-' || value[10] != 'T'
                 || value[13] != ':' || value[16] != ':')
@@ -242,99 +247,30 @@ namespace mamba
                 return std::nullopt;
             }
 
-            const auto year = parse_fixed_uint(value.substr(0, 4));
-            const auto month = parse_fixed_uint(value.substr(5, 2));
-            const auto day = parse_fixed_uint(value.substr(8, 2));
-            const auto hour = parse_fixed_uint(value.substr(11, 2));
-            const auto minute = parse_fixed_uint(value.substr(14, 2));
-            const auto second = parse_fixed_uint(value.substr(17, 2));
-            if (!year || !month || !day || !hour || !minute || !second)
+            if (auto instant = parse_chrono<SysTime>(value, "%FT%T%Ez"))
             {
-                return std::nullopt;
+                return CutoffInstant{ instant->time_since_epoch() };
             }
-
-            std::tm tm = {};
-            tm.tm_year = *year - 1900;
-            tm.tm_mon = *month - 1;
-            tm.tm_mday = *day;
-            tm.tm_hour = *hour;
-            tm.tm_min = *minute;
-            tm.tm_sec = *second;
-            tm.tm_isdst = 0;
-
-            auto timestamp = timegm_utc(tm);
-            auto suffix = value.substr(19);
-
-            if (suffix.empty())
+            if (auto instant = parse_chrono<SysTime>(value, "%FT%TZ"))
+            {
+                return CutoffInstant{ instant->time_since_epoch() };
+            }
+            if (auto instant = parse_chrono<SysTime>(value, "%FT%T"))
             {
                 // Naive datetimes are interpreted as UTC.
+                return CutoffInstant{ instant->time_since_epoch() };
             }
-            else if (suffix.size() == 1
-                     && std::tolower(static_cast<unsigned char>(suffix.front())) == 'z')
-            {
-                // Explicit UTC.
-            }
-            else if (suffix.size() == 6 && (suffix.front() == '+' || suffix.front() == '-')
-                     && suffix[3] == ':')
-            {
-                const auto offset_hours = parse_fixed_uint(suffix.substr(1, 2));
-                const auto offset_minutes = parse_fixed_uint(suffix.substr(4, 2));
-                if (!offset_hours || !offset_minutes)
-                {
-                    return std::nullopt;
-                }
-                const auto sign = suffix.front() == '+' ? 1 : -1;
-                const auto offset_seconds = sign * (*offset_hours * 3600 + *offset_minutes * 60);
-                timestamp -= offset_seconds;
-            }
-            else
-            {
-                return std::nullopt;
-            }
-
-            if (timestamp < 0)
-            {
-                return std::nullopt;
-            }
-            return static_cast<std::uint64_t>(timestamp);
+            return std::nullopt;
         }
 
-        [[nodiscard]] auto
-        duration_cutoff(std::uint64_t duration_seconds, std::uint64_t now_seconds) -> std::uint64_t
+        [[nodiscard]] auto duration_cutoff(std::chrono::seconds duration, CutoffInstant now)
+            -> CutoffInstant
         {
-            if (duration_seconds > now_seconds)
+            if (duration > now.time_since_epoch())
             {
-                return 0;
+                return CutoffInstant{};
             }
-            return now_seconds - duration_seconds;
-        }
-
-        [[nodiscard]] auto
-        resolve_exclude_newer_cutoff_impl(std::string_view value, std::uint64_t now_seconds)
-            -> std::optional<std::uint64_t>
-        {
-            value = util::strip_if(value, [](char c) { return util::is_space(c); });
-            if (value.empty())
-            {
-                return std::nullopt;
-            }
-
-            if (auto duration_seconds = parse_duration_seconds(value))
-            {
-                return duration_cutoff(*duration_seconds, now_seconds);
-            }
-
-            if (auto timestamp = parse_date_only_next_utc_day(value))
-            {
-                return *timestamp;
-            }
-
-            if (auto timestamp = parse_datetime_timestamp(value))
-            {
-                return *timestamp;
-            }
-
-            throw invalid_exclude_newer(value);
+            return now - duration;
         }
 
     }  // namespace
@@ -342,13 +278,36 @@ namespace mamba
     auto resolve_exclude_newer_cutoff(std::string_view value, std::uint64_t now_seconds)
         -> std::optional<std::uint64_t>
     {
-        return resolve_exclude_newer_cutoff_impl(value, now_seconds);
+        value = util::strip_if(value, is_space);
+        if (value.empty())
+        {
+            return std::nullopt;
+        }
+
+        const auto now = CutoffInstant{ std::chrono::seconds{ now_seconds } };
+
+        if (auto duration = parse_duration_seconds(value))
+        {
+            return to_unix_seconds(duration_cutoff(*duration, now));
+        }
+
+        if (auto instant = parse_date_only(value))
+        {
+            return to_unix_seconds(*instant);
+        }
+
+        if (auto instant = parse_datetime(value))
+        {
+            return to_unix_seconds(*instant);
+        }
+
+        throw invalid_exclude_newer(value);
     }
 
     auto ExcludeNewerPolicy::cutoff_for(std::string_view package_name) const
         -> std::optional<std::uint64_t>
     {
-        if (const auto it = per_package.find(package_name); it != per_package.end())
+        if (const auto it = per_package.find(std::string(package_name)); it != per_package.end())
         {
             return it->second;
         }
@@ -373,10 +332,7 @@ namespace mamba
         auto out = ExcludeNewerPackageCutoffs{};
         for (const auto& [name, value] : exclude_newer_package)
         {
-            const auto trimmed = util::strip_if(
-                std::string_view{ value },
-                [](char c) { return util::is_space(c); }
-            );
+            const auto trimmed = util::strip_if(std::string_view{ value }, is_space);
             if (equals_ci(trimmed, "false"))
             {
                 out.emplace(name, std::nullopt);

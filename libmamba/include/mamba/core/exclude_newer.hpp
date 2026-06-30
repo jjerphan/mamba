@@ -8,7 +8,6 @@
 #define MAMBA_CORE_EXCLUDE_NEWER_HPP
 
 #include <cstdint>
-#include <functional>
 #include <map>
 #include <optional>
 #include <string>
@@ -17,28 +16,12 @@
 
 namespace mamba
 {
-    namespace detail
-    {
-        struct ExcludeNewerPackageHash
-        {
-            [[nodiscard]] auto operator()(std::string_view value) const noexcept -> std::size_t
-            {
-                return std::hash<std::string_view>{}(value);
-            }
-        };
-
-        struct ExcludeNewerPackageEqual
-        {
-            [[nodiscard]] auto operator()(std::string_view lhs, std::string_view rhs) const noexcept
-                -> bool
-            {
-                return lhs == rhs;
-            }
-        };
-    }  // namespace detail
-
     /**
      * Resolved per-package ``exclude_newer`` cutoffs.
+     *
+     * Cutoffs are stored as Unix epoch seconds (``std::uint64_t``) for compatibility with
+     * conda repodata timestamps and ``Database::Settings``. Parsing uses
+     * ``std::chrono::sys_seconds`` internally; see ``resolve_exclude_newer_cutoff``.
      *
      * When a package name is present:
      * - ``std::nullopt`` exempts the package from the global policy (``false`` in config)
@@ -46,11 +29,7 @@ namespace mamba
      *
      * Packages not listed fall back to the global cutoff.
      */
-    using ExcludeNewerPackageCutoffs = std::unordered_map<
-        std::string,
-        std::optional<std::uint64_t>,
-        detail::ExcludeNewerPackageHash,
-        detail::ExcludeNewerPackageEqual>;
+    using ExcludeNewerPackageCutoffs = std::unordered_map<std::string, std::optional<std::uint64_t>>;
 
     struct ExcludeNewerPolicy
     {
@@ -98,6 +77,12 @@ namespace mamba
     /**
      * Resolve a global ``exclude_newer`` configuration value to an absolute Unix
      * timestamp cutoff in seconds.
+     *
+     * The public API exposes ``std::uint64_t`` seconds for compatibility with repodata
+     * timestamps. Internally, date and datetime values are parsed with
+     * ``std::chrono::parse`` and converted at this boundary. Duration strings
+     * (``7d``, ``P7D``, plain seconds) use custom parsers because the standard library
+     * does not provide ISO 8601 duration parsing.
      *
      * Matches conda's ``exclude_newer`` semantics:
      * - Durations (``7d``, ``P7D``, plain seconds) resolve to ``now - duration``
