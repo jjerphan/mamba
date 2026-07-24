@@ -1,0 +1,84 @@
+name: Repro #4349 win-64
+
+on:
+  workflow_dispatch:
+
+jobs:
+  repro:
+    name: Dual conda+pip polars update stuck
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash -elo pipefail {0}
+    steps:
+      - name: Setup micromamba
+        uses: mamba-org/setup-micromamba@v2
+        with:
+          micromamba-version: latest
+          init-shell: bash
+          generate-run-shell: true
+          environment-name: repro4349
+          create-args: >-
+            -c conda-forge
+            --override-channels
+            python=3.12
+            polars=1.42.1
+            pip
+
+      - name: Show micromamba / platform
+        run: |
+          micromamba --version
+          micromamba info
+          micromamba list | tee before_pip.txt
+          grep -iE 'polars|tzdata|python ' before_pip.txt || true
+
+      - name: Pip-install older polars (as in issue #4349 env export)
+        run: |
+          # Mirrors https://github.com/mamba-org/mamba/issues/4349#issuecomment-5048152491
+          # conda: polars=1.42.1 ; pip: polars==1.37.0
+          micromamba run -n repro4349 pip install 'polars==1.37.0'
+          echo '=== after pip ==='
+          micromamba list | tee after_pip.txt
+          grep -i polars after_pip.txt || true
+          micromamba run -n repro4349 python -c "import polars; print('import', polars.__version__)"
+
+      - name: update --all (expect stuck / no-op unlink)
+        run: |
+          set +e
+          micromamba update -n repro4349 --all -y -c conda-forge --override-channels -vv 2>&1 | tee update_all.log
+          ec=${PIPESTATUS[0]}
+          set -e
+          echo "update exit=$ec"
+          echo '=== key lines ==='
+          grep -iE 'Upgrade|Transaction|Linking|Unlinking|Uninstalling|polars|finished|starting|Summary' update_all.log || true
+
+      - name: Inspect conda-meta and list after update
+        run: |
+          PREFIX=$(micromamba env list | awk '/repro4349/{print $NF; exit}')
+          echo "PREFIX=$PREFIX"
+          echo '=== conda-meta polars* ==='
+          ls -la "$PREFIX/conda-meta"/polars* || true
+          echo '=== micromamba list ==='
+          micromamba list -n repro4349 | tee after_update.txt
+          grep -i polars after_update.txt || true
+          echo '=== import ==='
+          micromamba run -n repro4349 python -c "import polars; print(polars.__version__)" || true
+          echo '=== dry-run update --all again ==='
+          micromamba update -n repro4349 --all --dry-run -c conda-forge --override-channels 2>&1 | tee dry_run.log
+          grep -iE 'Upgrade|polars|Summary|All requested|Nothing' dry_run.log || true
+
+          # Fail the job if the bug is reproduced (stuck upgrade still proposed)
+          if grep -q 'polars.*1\.42\.1' after_update.txt && grep -q 'Upgrade: 2 packages' dry_run.log; then
+            echo 'REPRODUCED: list still shows 1.42.1 and update --all still proposes upgrade'
+            exit 1
+          fi
+          echo 'NOT REPRODUCED on this runner/micromamba version'
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repro-4349-win64-logs
+          path: |
+            *.txt
+            *.log
