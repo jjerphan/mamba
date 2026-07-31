@@ -30,6 +30,7 @@
 #include "mamba/core/thread_utils.hpp"
 #include "mamba/core/transaction.hpp"
 #include "mamba/core/util.hpp"
+#include "mamba/core/util_os.hpp"
 #include "mamba/core/util_scope.hpp"
 #include "mamba/solver/libsolv/database.hpp"
 #include "mamba/specs/match_spec.hpp"
@@ -55,22 +56,6 @@ namespace mamba
             return caches.get_extracted_dir_path(pkg_info).empty()
                    && caches.get_tarball_path(pkg_info).empty();
         }
-
-        // TODO duplicated function, consider moving it to Pool
-        auto database_has_package(solver::libsolv::Database& database, const specs::MatchSpec& spec)
-            -> bool
-        {
-            bool found = false;
-            database.for_each_package_matching(
-                spec,
-                [&](const auto&)
-                {
-                    found = true;
-                    return util::LoopControl::Break;
-                }
-            );
-            return found;
-        };
 
         auto explicit_spec(const specs::PackageInfo& pkg) -> specs::MatchSpec
         {
@@ -169,7 +154,7 @@ namespace mamba
         for (const auto& pkg : pkgs_to_remove)
         {
             auto spec = explicit_spec(pkg);
-            if (!database_has_package(database, spec))
+            if (!database.has_package(spec))
             {
                 not_found << "\n - " << spec.to_string();
             }
@@ -466,6 +451,15 @@ namespace mamba
             {
                 LOG_ERROR << "Unexpected error while " << phase << " package '" << pkg.name
                           << "': " << e.what();
+#ifdef _WIN32
+                if ((phase == "linking" || phase == "unlinking") && !are_long_paths_enabled())
+                {
+                    LOG_WARNING << "Windows long path support is disabled, which can cause "
+                                << phase << " failures with deep cache or prefix paths. "
+                                << long_paths_support_diagnostic();
+                }
+                log_long_paths_support_hint_if_relevant(e);
+#endif
                 rethrow_transaction_cancelled_after_rollback(rollback, ctx, pkg, phase, e);
             }
             catch (...)
