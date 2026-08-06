@@ -49,6 +49,7 @@ jobs:
       - name: Create build environment
         uses: mamba-org/setup-micromamba@v3
         with:
+          micromamba-version: "2.9.0.rc1"
           environment-file: ./dev/environment-dev.yml
           environment-name: build_env
           cache-environment: true
@@ -123,6 +124,7 @@ jobs:
       - name: Create build environment
         uses: mamba-org/setup-micromamba@v3
         with:
+          micromamba-version: "2.9.0.rc1"
           environment-file: ./build/environment.lock
           environment-name: build_env
       - name: Run solv-cpp tests
@@ -183,6 +185,7 @@ jobs:
       - name: Create build environment
         uses: mamba-org/setup-micromamba@v3
         with:
+          micromamba-version: "2.9.0.rc1"
           environment-file: ./build/environment.lock
           environment-name: build_env
       - name: Install libmambapy
@@ -242,6 +245,7 @@ jobs:
       - name: Create build environment
         uses: mamba-org/setup-micromamba@v3
         with:
+          micromamba-version: "2.9.0.rc1"
           environment-file: ./build/environment.lock
           environment-name: build_env
       - name: install zsh, xonsh, fish and tcsh in linux
@@ -322,6 +326,7 @@ jobs:
       - name: Create build environment
         uses: mamba-org/setup-micromamba@v3
         with:
+          micromamba-version: "2.9.0.rc1"
           environment-file: ./build/environment.lock
           environment-name: build_env
       - name: Run tests using conda-content-trust (server side)

@@ -46,6 +46,7 @@ jobs:
       - name: Create build environment
         uses: mamba-org/setup-micromamba@v3
         with:
+          micromamba-version: "2.9.0.rc1"
           environment-file: ./dev/environment-dev.yml
           environment-name: build_env
           cache-environment: true

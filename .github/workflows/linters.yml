@@ -38,6 +38,7 @@ jobs:
       - name: Install pre-commit and identify
         uses: mamba-org/setup-micromamba@v3
         with:
+          micromamba-version: "2.9.0.rc1"
           environment-name: linters
           create-args: pre-commit identify
       - name: Add micromamba to GITHUB_PATH
