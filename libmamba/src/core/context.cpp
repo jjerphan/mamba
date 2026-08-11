@@ -130,7 +130,19 @@ namespace mamba
 
     Context::~Context()
     {
-        logging::stop_logging();
+        // Use `program_exit` rather than the default `manual_stop`.
+        //
+        // `Context` often outlives `main()` / is destroyed from Python during
+        // interpreter or process shutdown (`atexit`, module teardown). In that
+        // situation, touching spdlog (flush / `drop_all`) is unsafe: its static
+        // registry or sinks may already have been destroyed, which leads to a
+        // segfault in `stop_logging` (see mamba-org/mamba#4378,
+        // conda/constructor#1319).
+        //
+        // `program_exit` lets the log-handler skip that cleanup and leave it to
+        // the backend's own shutdown. Mid-lifetime reuse is handled by clearing
+        // leftover loggers when logging is started again.
+        logging::stop_logging(logging::stop_reason::program_exit);
     }
 
     void Context::set_verbosity(int lvl)

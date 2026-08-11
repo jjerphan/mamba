@@ -92,6 +92,11 @@ namespace mamba::logging::spdlogimpl
 
         const auto main_source = sources.front();
 
+        // A previous `Context` may have been destroyed with `stop_reason::program_exit`,
+        // which intentionally leaves spdlog loggers registered. Clear them before
+        // re-registering so starting logging again after such a shutdown is safe.
+        spdlog::drop_all();
+
         spdlog::set_default_logger(
             std::make_shared<Logger>(name_of(main_source), params.log_pattern, "\n")
         );

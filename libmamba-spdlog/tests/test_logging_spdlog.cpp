@@ -93,6 +93,38 @@ namespace mamba::logging
         }
     }
 
+    TEST_CASE("LogHandler_spdlog restart after program_exit stop")
+    {
+        // Regression: Context::~Context stops logging with program_exit, which leaves
+        // spdlog loggers registered. Starting logging again must still succeed
+        // (mamba-org/mamba#4378).
+        spdlogimpl::LogHandler_spdlog handler{ testing_options };
+        on_scope_exit _{ [&] { handler.stop_log_handling(stop_reason::manual_stop); } };
+
+        handler.start_log_handling({}, testing::testing_log_sources());
+        REQUIRE(handler.is_started());
+        handler.log(
+            LogRecord{
+                .message = "before program_exit stop",
+                .level = log_level::warn,
+                .source = log_source::tests,
+            }
+        );
+
+        handler.stop_log_handling(stop_reason::program_exit);
+        REQUIRE(not handler.is_started());
+
+        handler.start_log_handling({}, testing::testing_log_sources());
+        REQUIRE(handler.is_started());
+        handler.log(
+            LogRecord{
+                .message = "after restart",
+                .level = log_level::warn,
+                .source = log_source::tests,
+            }
+        );
+    }
+
     TEST_CASE("LogHandler_spdlog concurrency")
     {
         spdlogimpl::LogHandler_spdlog handler{ testing_options };
