@@ -48,6 +48,10 @@ jobs:
         with:
           environment-file: ./dev/environment-dev.yml
           environment-name: build_env
+          # Most verbose micromamba logs to debug sporadic
+          # "Cannot find a valid extracted directory cache" failures
+          # after environment cache restore.
+          log-level: trace
           cache-environment: true
           cache-environment-key: >-
             coverage-${{
@@ -57,10 +61,60 @@ jobs:
                 'dev/environment-micromamba-static.yml'
               )
             }}-${{ github.event.pull_request.number || github.ref }}
+      - name: Dump package cache after environment restore
+        run: |
+          echo '::group::Package cache after environment restore'
+          echo "MAMBA_ROOT_PREFIX=${MAMBA_ROOT_PREFIX}"
+          micromamba --log-level=trace info -n build_env || true
+          pkgs="${MAMBA_ROOT_PREFIX}/pkgs"
+          if [[ -d "${pkgs}" ]]; then
+            echo "Package cache exists: ${pkgs}"
+            echo "Top-level entries: $(find "${pkgs}" -mindepth 1 -maxdepth 1 | wc -l)"
+            echo "pygments-related paths:"
+            find "${pkgs}" -iname '*pygments*' -print 2>/dev/null || echo "(none)"
+          else
+            echo "Package cache directory does not exist: ${pkgs}"
+          fi
+          echo "Installed pygments metadata:"
+          ls -la "${MAMBA_ROOT_PREFIX}/envs/build_env/conda-meta/"*pygments* 2>/dev/null || echo "(none)"
+          df -h
+          echo '::endgroup::'
       - name: Install dev-extra environment
-        run: micromamba install -n build_env -y -f ./dev/environment-dev-extra.yml
+        run: |
+          micromamba install -n build_env -y -vvv --log-level=trace \
+            -f ./dev/environment-dev-extra.yml
+          echo '::group::Package cache after dev-extra install'
+          pkgs="${MAMBA_ROOT_PREFIX}/pkgs"
+          echo "Top-level pkgs entries: $(find "${pkgs}" -mindepth 1 -maxdepth 1 | wc -l)"
+          echo "pygments-related paths:"
+          find "${pkgs}" -iname '*pygments*' -print 2>/dev/null || echo "(none)"
+          echo '::endgroup::'
       - name: Install micromamba-static environment
-        run: micromamba install -n build_env -y -f ./dev/environment-micromamba-static.yml
+        run: |
+          dump_pygments_cache() {
+            echo '::group::Package cache dump (pygments / pkgs)'
+            pkgs="${MAMBA_ROOT_PREFIX}/pkgs"
+            echo "Package cache: ${pkgs}"
+            if [[ -d "${pkgs}" ]]; then
+              echo "Top-level pkgs entries: $(find "${pkgs}" -mindepth 1 -maxdepth 1 | wc -l)"
+              echo "pygments-related paths:"
+              find "${pkgs}" -iname '*pygments*' -ls 2>/dev/null || echo "(none)"
+              echo "Extracted pygments directories:"
+              find "${pkgs}" -type d -iname 'pygments-*' -print 2>/dev/null || echo "(none)"
+              echo "pygments tarballs:"
+              find "${pkgs}" -type f \( -iname 'pygments-*.conda' -o -iname 'pygments-*.tar.bz2' \) -ls 2>/dev/null || echo "(none)"
+            else
+              echo "Package cache directory does not exist"
+            fi
+            echo "Installed pygments metadata:"
+            ls -la "${MAMBA_ROOT_PREFIX}/envs/build_env/conda-meta/"*pygments* 2>/dev/null || echo "(none)"
+            df -h
+            echo '::endgroup::'
+          }
+          dump_pygments_cache
+          micromamba install -n build_env -y -vvv --log-level=trace \
+            -f ./dev/environment-micromamba-static.yml \
+            || { dump_pygments_cache; exit 1; }
       - uses: hendrikmuhs/ccache-action@main
         with:
           variant: sccache
