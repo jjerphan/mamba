@@ -1,4 +1,5 @@
 #include <iostream>
+#include <map>
 #include <regex>
 #include <vector>
 
@@ -12,6 +13,8 @@
 #if defined(__APPLE__)
 #include <libproc.h>
 #include <mach-o/dyld.h>
+#include <sys/resource.h>
+#include <sys/syslimits.h>
 #endif
 #include <inttypes.h>
 #include <limits.h>
@@ -38,6 +41,7 @@
 #include "mamba/core/error_handling.hpp"
 #include "mamba/core/output.hpp"
 #include "mamba/core/util_os.hpp"
+#include "mamba/core/util_scope.hpp"
 #include "mamba/fs/filesystem.hpp"
 #include "mamba/util/build.hpp"
 #include "mamba/util/environment.hpp"
@@ -746,7 +750,45 @@ namespace mamba
     void codesign(const fs::u8path& path, bool verbose)
     {
         reproc::options options;
+        // Keep DYLD_* out of the child. A fully empty environment makes
+        // posix_spawn fail with EINVAL on macOS (GitHub Actions runners).
+        // PATH/HOME/TMPDIR are enough for /usr/bin/codesign.
         options.env.behavior = reproc::env::empty;
+        std::map<std::string, std::string> envmap;
+        envmap["PATH"] = "/usr/bin:/bin";
+        if (auto home = util::get_env("HOME"))
+        {
+            envmap["HOME"] = *home;
+        }
+        envmap["TMPDIR"] = util::get_env("TMPDIR").value_or("/tmp");
+        options.env.extra = envmap;
+
+#if defined(__APPLE__)
+        // posix_spawn also returns EINVAL when RLIMIT_NOFILE is above OPEN_MAX.
+        struct rlimit previous_nofile{};
+        bool restore_nofile = false;
+        if (getrlimit(RLIMIT_NOFILE, &previous_nofile) == 0 && previous_nofile.rlim_cur > OPEN_MAX)
+        {
+            struct rlimit capped = previous_nofile;
+            capped.rlim_cur = OPEN_MAX;
+            if (setrlimit(RLIMIT_NOFILE, &capped) == 0)
+            {
+                restore_nofile = true;
+            }
+            else
+            {
+                LOG_WARNING << "Could not cap RLIMIT_NOFILE for codesign";
+            }
+        }
+        on_scope_exit restore_nofile_limit{ [&]
+                                            {
+                                                if (restore_nofile)
+                                                {
+                                                    setrlimit(RLIMIT_NOFILE, &previous_nofile);
+                                                }
+                                            } };
+#endif
+
         if (!verbose)
         {
             reproc::redirect silence;
