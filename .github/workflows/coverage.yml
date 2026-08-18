@@ -48,24 +48,17 @@ jobs:
         with:
           environment-file: ./dev/environment-dev.yml
           environment-name: build_env
-          # Create the full coverage env in one shot. Follow-up `micromamba install`
-          # of extra/static files after a cache-environment hit restores the prefix
-          # without `pkgs/` and then upgrades Python, which reinstalls noarch
-          # packages such as pygments. Released micromamba 2.9.0 then fails with
-          # "Cannot find a valid extracted directory cache" because of a stale
-          # negative package-cache entry (fixed on main in #4328, not shipped yet).
-          create-args: >-
-            -f ./dev/environment-dev-extra.yml
-            -f ./dev/environment-micromamba-static.yml
-          cache-environment: true
-          cache-environment-key: >-
-            coverage-${{
-              hashFiles(
-                'dev/environment-dev.yml',
-                'dev/environment-dev-extra.yml',
-                'dev/environment-micromamba-static.yml'
-              )
-            }}-${{ github.event.pull_request.number || github.ref }}
+          # Do not cache the env prefix. A cache hit restores it without pkgs/,
+          # and the follow-up static install then upgrades Python and reinstalls
+          # noarch packages. Micromamba 2.9.0 fails that relink with a stale
+          # negative extracted-dir cache (#4328, not in 2.9.0). Combining the
+          # extra/static files into this create is also unsatisfiable (shared vs
+          # static libs, python>=3.12 vs bcrypt==4.0.1).
+          cache-environment: false
+      - name: Install dev-extra environment
+        run: micromamba install -n build_env -y -f ./dev/environment-dev-extra.yml
+      - name: Install micromamba-static environment
+        run: micromamba install -n build_env -y -f ./dev/environment-micromamba-static.yml
       - uses: hendrikmuhs/ccache-action@main
         with:
           variant: sccache
