@@ -10,8 +10,7 @@
       "description": "Base profile using conda libraries and compilers on Unix",
       "displayName": "Conda Unix",
       "hidden": true,
-      "name": "conda-unix",
-      "toolchainFile": "${sourceDir}/dev/conda_unix_compilers.cmake"
+      "name": "conda-unix"
     },
     {
       "description": "Base profile using conda libraries and host Unix compilers",
